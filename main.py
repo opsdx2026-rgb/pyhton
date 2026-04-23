@@ -1,84 +1,133 @@
 import os
 import requests
 from datetime import datetime
-import schedule
+import pytz
 import time
 
 # =========================
 # CONFIG
 # =========================
-BOT_TOKEN = os.getenv('BOT_TOKEN', '8730580443:AAEIp0lVVUItXN_4smxKdUqWT9UT3M1hOW4')
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-CHAT_IDS = [
-    8495972050,-5280540812
-]
+CHAT_IDS = [8495972050, -5280540812]
+
+COINS = {
+    "DRX": "drxidr",
+    "CST": "cstidr",
+    "ANOA": "anoaidr"
+}
+
+THRESHOLD = 5  # % alert
+last_prices = {}
 
 # =========================
-# INDODAX API
+# FORMAT RUPIAH
 # =========================
-def get_indodax_price():
-    url = "https://indodax.com/api/ticker/drxidr"
-    
+def format_rupiah(value):
+    return f"{int(value):,}".replace(",", ".")
+
+# =========================
+# GET PRICE
+# =========================
+def get_price(pair):
+    url = f"https://indodax.com/api/ticker/{pair}"
     try:
-        response = requests.get(url, timeout=10)
+        r = requests.get(url, timeout=10)
 
-        if response.status_code != 200:
-            print("Bad response:", response.status_code)
+        if r.status_code != 200:
+            print("Bad response:", r.status_code)
             return None
 
-        data = response.json()
+        data = r.json()
 
         if "ticker" not in data:
             print("Invalid data:", data)
             return None
 
-        return data
+        return float(data["ticker"]["last"])
 
     except Exception as e:
         print("API error:", e)
         return None
 
 # =========================
-# TELEGRAM
+# TELEGRAM SEND
 # =========================
 def send_telegram(message):
     for chat_id in CHAT_IDS:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-        data = {
-            "chat_id": chat_id,
-            "text": message
-        }
-        requests.post(url, data=data)
+        try:
+            requests.post(url, data={"chat_id": chat_id, "text": message})
+        except Exception as e:
+            print("Telegram error:", e)
 
 # =========================
-# JOB
+# CALCULATE %
+# =========================
+def calc_change(old, new):
+    if old is None:
+        return 0
+    return ((new - old) / old) * 100
+
+# =========================
+# MAIN JOB
 # =========================
 def job():
-    data = get_indodax_price()
+    global last_prices
 
-    if not data:
-        print("Skip (no data)")
-        return
+    wib = pytz.timezone("Asia/Jakarta")
+    timestamp = datetime.now(wib).strftime("%Y-%m-%d %H:%M")
 
-    price = float(data['ticker']['last'])
+    message = f"📊 Indodax Update\n⏰ {timestamp}\n\n"
 
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+    new_prices = {}
+    alert_triggered = False
 
-    message = f"""
-📊 Indodax Update
-⏰ {timestamp}
+    for coin, pair in COINS.items():
+        price = get_price(pair)
 
-DRX: Rp {price:,.0f}
-CST: Rp {price * 39.25:,.0f}
-ANOA: Rp {price * 8.13:,.0f}
-"""
+        if price is None:
+            message += f"{coin}: error\n"
+            continue
 
+        old_price = last_prices.get(coin)
+        change = calc_change(old_price, price)
+
+        line = f"{coin}: Rp {format_rupiah(price)}"
+
+        if old_price:
+            line += f" ({change:.2f}%)"
+
+            if change >= THRESHOLD:
+                line += " 🚀 +5%"
+                alert_triggered = True
+
+            elif change <= -THRESHOLD:
+                line += " 🔻 -5%"
+                alert_triggered = True
+
+        message += line + "\n"
+        new_prices[coin] = price
+
+    print(message)
+
+    # send normal update
     send_telegram(message)
 
-schedule.every(1).minutes.do(job)
+    # send alert if triggered
+    if alert_triggered:
+        send_telegram("🚨 PRICE ALERT (±5%) 🚨\n\n" + message)
 
+    last_prices = new_prices
+
+# =========================
+# LOOP (30 MIN)
+# =========================
 if __name__ == "__main__":
-    print("Bot started...")
+    print("Bot started...\n")
+
+    job()  # run immediately
+
     while True:
-        schedule.run_pending()
-        time.sleep(1)
+        time.sleep(1800)  # 30 minutes
+        job()
