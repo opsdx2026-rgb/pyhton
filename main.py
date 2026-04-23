@@ -6,7 +6,7 @@ import time
 # CONFIG
 # =========================
 import os
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+BOT_TOKEN = os.getenv('BOT_TOKEN', '8730580443:AAEIp0lVVUItXN_4smxKdUqWT9UT3M1hOW4')
 
 CHAT_IDS = [
     8495972050,-5280540812
@@ -27,7 +27,7 @@ last_prices = {}
 # =========================
 def send_telegram(message):
     for chat_id in CHAT_IDS:
-        url = f"https://api.telegram.org/bot{8730580443:AAEIp0lVVUItXN_4smxKdUqWT9UT3M1hOW4}/sendMessage"
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
         data = {
             "chat_id": chat_id,
             "text": message
