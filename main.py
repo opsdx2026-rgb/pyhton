@@ -1,129 +1,60 @@
+import os
 import requests
 from datetime import datetime
+import schedule
 import time
 
 # =========================
 # CONFIG
 # =========================
-import os
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+BOT_TOKEN = os.getenv('BOT_TOKEN', '8730580443:AAEIp0lVVUItXN_4smxKdUqWT9UT3M1hOW4')
 
 CHAT_IDS = [
     8495972050,-5280540812
 ]
 
-COINS = {
-    "DRX": "drxidr",
-    "CST": "cstidr",
-    "ANOA": "anoaidr"
-}
-
-THRESHOLD = 5  # percent alert
-
-last_prices = {}
+# =========================
+# INDODAX API
+# =========================
+def get_indodax_price():
+    url = "https://api.indodax.com/api/ticker/drx_idr"
+    response = requests.get(url)
+    return response.json()
 
 # =========================
-# TELEGRAM SEND
+# TELEGRAM
 # =========================
 def send_telegram(message):
     for chat_id in CHAT_IDS:
-        url = f"https://api.telegram.org/bot{8730580443:AAEIp0lVVUItXN_4smxKdUqWT9UT3M1hOW4}/sendMessage"
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
         data = {
             "chat_id": chat_id,
             "text": message
         }
-        try:
-            requests.post(url, data=data)
-        except Exception as e:
-            print("Telegram error:", e)
+        requests.post(url, data=data)
 
 # =========================
-# GET PRICE
-# =========================
-def get_price(pair):
-    try:
-        url = f"https://indodax.com/api/ticker/{pair}"
-        r = requests.get(url, timeout=5)
-        data = r.json()
-
-        if "ticker" in data:
-            return float(data["ticker"]["last"])
-        return None
-
-    except Exception as e:
-        print("Error:", e)
-        return None
-
-# =========================
-# FORMAT
-# =========================
-def format_price(price):
-    return f"{int(price):,}".replace(",", ".")
-
-# =========================
-# CHANGE %
-# =========================
-def calc_change(old, new):
-    if old is None:
-        return 0
-    return ((new - old) / old) * 100
-
-# =========================
-# MAIN JOB
+# JOB
 # =========================
 def job():
-    global last_prices
+    data = get_indodax_price()
+    
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+    message = f"""
+📊 Indodax Update
+⏰ {timestamp}
 
-    now = datetime.now().strftime("%Y-%m-%d %H:%M")
-    message = f"📊 Indodax Update\n⏰ {now}\n\n"
-
-    new_prices = {}
-    alert_triggered = False
-
-    for coin, pair in COINS.items():
-        price = get_price(pair)
-
-        if price is None:
-            message += f"{coin}: error\n"
-            continue
-
-        old_price = last_prices.get(coin)
-        change = calc_change(old_price, price)
-
-        line = f"{coin}: Rp {format_price(price)}"
-
-        if old_price:
-            line += f" ({change:.2f}%)"
-
-            if change >= THRESHOLD:
-                line += " 🚀 +5%"
-                alert_triggered = True
-
-            elif change <= -THRESHOLD:
-                line += " 🔻 -5%"
-                alert_triggered = True
-
-        message += line + "\n"
-        new_prices[coin] = price
-
-    print(message)
-
-    # ALWAYS send update every 30 min
+DRX: Rp {data['ticker']['last']:,.0f}
+CST: Rp {data['ticker']['last'] * 39.25:,.0f}
+ANOA: Rp {data['ticker']['last'] * 8.13:,.0f}
+"""
+    
     send_telegram(message)
 
-    # EXTRA alert if threshold hit
-    if alert_triggered:
-        send_telegram("🚨 PRICE ALERT (±5%) 🚨\n\n" + message)
+schedule.every(1).minutes.do(job)
 
-    last_prices = new_prices
-
-
-# =========================
-# LOOP (30 MIN)
-# =========================
 if __name__ == "__main__":
-    print("Bot started...\n")
-
+    print("Bot started...")
     while True:
-        job()
-        time.sleep(1800)  # 30 minutes
+        schedule.run_pending()
+        time.sleep(1)
