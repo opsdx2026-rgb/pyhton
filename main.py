@@ -7,7 +7,7 @@ import time
 # =========================
 # CONFIG
 # =========================
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8730580443:AAEIp0lVVUItXN_4smxKdUqWT9UT3M1hOW4")
 
 CHAT_IDS = [8495972050, -5280540812]
 
