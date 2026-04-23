@@ -7,7 +7,10 @@ import time
 # =========================
 # CONFIG
 # =========================
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8730580443:AAEIp0lVVUItXN_4smxKdUqWT9UT3M1hOW4")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+
+if not BOT_TOKEN:
+    raise ValueError("BOT_TOKEN is missing!")
 
 CHAT_IDS = [8495972050, -5280540812]
 
@@ -57,7 +60,13 @@ def send_telegram(message):
     for chat_id in CHAT_IDS:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
         try:
-            requests.post(url, data={"chat_id": chat_id, "text": message})
+            res = requests.post(url, data={
+                "chat_id": chat_id,
+                "text": message
+            })
+
+            print("Telegram response:", res.text)
+
         except Exception as e:
             print("Telegram error:", e)
 
