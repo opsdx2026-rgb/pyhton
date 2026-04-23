@@ -57,9 +57,13 @@ def send_telegram(message):
     for chat_id in CHAT_IDS:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
         try:
-            requests.post(url, data={"chat_id": chat_id, "text": message})
+            print(f"Sending to {chat_id}...")
+            response = requests.post(url, data={"chat_id": chat_id, "text": message})
+            print(f"Response status: {response.status_code}")
+            print(f"Response: {response.text}")
         except Exception as e:
-            print("Telegram error:", e)
+            print(f"Telegram error: {e}")
+
 
 # =========================
 # CALCULATE %
