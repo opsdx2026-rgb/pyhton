@@ -17,9 +17,26 @@ CHAT_IDS = [
 # INDODAX API
 # =========================
 def get_indodax_price():
-    url = "https://api.indodax.com/api/ticker/drx_idr"
-    response = requests.get(url)
-    return response.json()
+    url = "https://indodax.com/api/ticker/drxidr"
+    
+    try:
+        response = requests.get(url, timeout=10)
+
+        if response.status_code != 200:
+            print("Bad response:", response.status_code)
+            return None
+
+        data = response.json()
+
+        if "ticker" not in data:
+            print("Invalid data:", data)
+            return None
+
+        return data
+
+    except Exception as e:
+        print("API error:", e)
+        return None
 
 # =========================
 # TELEGRAM
@@ -38,17 +55,24 @@ def send_telegram(message):
 # =========================
 def job():
     data = get_indodax_price()
-    
+
+    if not data:
+        print("Skip (no data)")
+        return
+
+    price = float(data['ticker']['last'])
+
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+
     message = f"""
 📊 Indodax Update
 ⏰ {timestamp}
 
-DRX: Rp {data['ticker']['last']:,.0f}
-CST: Rp {data['ticker']['last'] * 39.25:,.0f}
-ANOA: Rp {data['ticker']['last'] * 8.13:,.0f}
+DRX: Rp {price:,.0f}
+CST: Rp {price * 39.25:,.0f}
+ANOA: Rp {price * 8.13:,.0f}
 """
-    
+
     send_telegram(message)
 
 schedule.every(1).minutes.do(job)
