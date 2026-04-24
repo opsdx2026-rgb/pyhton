@@ -12,7 +12,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN","8726552111:AAGPZ-DlKsfF4uP57OIK3k7mpWO8QjOCjb
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN is missing!")
 
-CHAT_IDS = [8495972050, -5280540812,-1003931797952]
+CHAT_IDS = [8495972050,-1003931797952]
 
 COINS = {
     "DRX": "drxidr",
@@ -54,6 +54,64 @@ def get_price(pair):
         return None
 
 # =========================
+# GET SELL WALL DATA
+# =========================
+def get_sell_wall(pair):
+    url = f"https://indodax.com/api/depth/{pair}"
+    try:
+        r = requests.get(url, timeout=10)
+
+        if r.status_code != 200:
+            print("Depth error:", r.status_code)
+            return None, None, None, None, None, None
+
+        data = r.json()
+
+        if "sell" not in data or len(data["sell"]) == 0:
+            return None, None, None, None, None, None
+
+        total_coin = 0
+        total_rp = 0
+        top_price = 0
+
+        strongest_price = 0
+        strongest_coin = 0
+        strongest_value = 0
+
+        for price, amount in data["sell"]:
+            price = float(price)
+            amount = float(amount)
+
+            value = price * amount
+
+            # total
+            total_coin += amount
+            total_rp += value
+
+            # highest price
+            if price > top_price:
+                top_price = price
+
+            # strongest wall (largest value)
+            if value > strongest_value:
+                strongest_value = value
+                strongest_price = price
+                strongest_coin = amount
+
+        return (
+            top_price,
+            total_coin,
+            total_rp,
+            strongest_price,
+            strongest_coin,
+            strongest_value
+        )
+
+    except Exception as e:
+        print("Depth API error:", e)
+        return None, None, None, None, None, None
+
+# =========================
 # TELEGRAM SEND
 # =========================
 def send_telegram(message):
@@ -63,7 +121,7 @@ def send_telegram(message):
             res = requests.post(url, data={
                 "chat_id": chat_id,
                 "text": message
-            })
+            }, timeout=10)
 
             print("Telegram response:", res.text)
 
@@ -96,11 +154,20 @@ def job():
         price = get_price(pair)
 
         if price is None:
-            message += f"{coin}: error\n"
+            message += f"{coin}: error\n\n"
             continue
 
         old_price = last_prices.get(coin)
         change = calc_change(old_price, price)
+
+        (
+            top_price,
+            sell_coin,
+            sell_rp,
+            strong_price,
+            strong_coin,
+            strong_value
+        ) = get_sell_wall(pair)
 
         line = f"{coin}: Rp {format_rupiah(price)}"
 
@@ -115,7 +182,20 @@ def job():
                 line += " 🔻 -5%"
                 alert_triggered = True
 
-        message += line + "\n"
+        # ===== SELL DATA =====
+        if sell_coin and sell_rp and top_price:
+            line += f"\n   🧱 Top Sell Price: Rp {format_rupiah(top_price)}"
+            line += f"\n   🪙 Total Sell: {sell_coin:,.2f}".replace(",", ".")
+            line += f"\n   💰 Total Value: Rp {format_rupiah(sell_rp)}"
+
+        # ===== STRONGEST WALL =====
+        if strong_price and strong_coin and strong_value:
+            line += f"\n   🧱 Strongest Wall:"
+            line += f"\n      Price: Rp {format_rupiah(strong_price)}"
+            line += f"\n      Vol  : {strong_coin:,.2f}".replace(",", ".")
+            line += f"\n      Val  : Rp {format_rupiah(strong_value)}"
+
+        message += line + "\n\n"
         new_prices[coin] = price
 
     print(message)
@@ -135,8 +215,8 @@ def job():
 if __name__ == "__main__":
     print("Bot started...\n")
 
-    job()  # run immediately
+    job()
 
     while True:
-        time.sleep(1800)  # 30 minutes
+        time.sleep(1800)
         job()
