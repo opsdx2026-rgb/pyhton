@@ -7,7 +7,7 @@ import time
 # =========================
 # CONFIG
 # =========================
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+BOT_TOKEN = os.getenv("BOT_TOKEN","8726552111:AAGPZ-DlKsfF4uP57OIK3k7mpWO8QjOCjbs")
 
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN is missing!")
