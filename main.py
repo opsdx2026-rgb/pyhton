@@ -7,12 +7,12 @@ import time
 # =========================
 # CONFIG
 # =========================
-BOT_TOKEN = os.getenv("BOT_TOKEN","8726552111:AAGPZ-DlKsfF4uP57OIK3k7mpWO8QjOCjbs")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8726552111:AAGPZ-DlKsfF4uP57OIK3k7mpWO8QjOCjbs")
 
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN is missing!")
 
-CHAT_IDS = [8495972050, -5280540812, -1003931797952]
+CHAT_IDS = [-1003931797952]
 
 COINS = {
     "DRX": "drxidr",
@@ -24,7 +24,10 @@ COINS = {
 # FORMAT
 # =========================
 def format_rupiah(value):
-    return f"{int(value):,}".replace(",", ".")
+    try:
+        return f"{int(value):,}".replace(",", ".")
+    except:
+        return "0"
 
 # =========================
 # GET PRICE
@@ -77,6 +80,7 @@ def get_market_depth(pair, current_price):
         sell = data.get("sell", [])
         buy = data.get("buy", [])
 
+        # SELL
         sell_total_coin = sell_total_value = 0
         sell_top_price = 0
         sell_strong_price = sell_strong_coin = sell_strong_value = 0
@@ -97,6 +101,7 @@ def get_market_depth(pair, current_price):
                 sell_strong_price = price
                 sell_strong_coin = amount
 
+        # BUY
         buy_total_coin = buy_total_value = 0
         buy_bottom_price = float("inf")
         buy_strong_price = buy_strong_coin = buy_strong_value = 0
@@ -189,11 +194,11 @@ def job():
 
         depth = get_market_depth(pair, price)
 
-        # 🔥 BIG & BOLD HEADER
         line = f"🔷 <b>{coin}</b>\n"
         line += f"💰 <b>Rp {format_rupiah(price)}</b>\n"
 
         if depth:
+            # SELL
             line += f"\n🟥 SELL"
             line += f"\n   🧱 Top Price: Rp {format_rupiah(depth['sell_top_price'])}"
             line += f"\n   🪙 Total Sell: {depth['sell_total_coin']:,.2f}".replace(",", ".")
@@ -201,34 +206,34 @@ def job():
 
             line += f"\n   🧱 Strongest Wall:"
             line += f"\n      Price: Rp {format_rupiah(depth['sell_strong_price'])}"
-            line += f"\n      Volume  : {depth['sell_strong_coin']:,.2f}".replace(",", ".")
-            line += f"\n      Value  : Rp {format_rupiah(depth['sell_strong_value'])}"
+            line += f"\n      Volume: {depth['sell_strong_coin']:,.2f}".replace(",", ".")
+            line += f"\n      Value: Rp {format_rupiah(depth['sell_strong_value'])}"
 
-   
-line += f"\n\n🟩 BUY"
-line += f"\n   🔻 Bottom Price: Rp {format_rupiah(depth['buy_bottom_price'])}"
-line += f"\n   🪙 Total Buy: {depth['buy_total_coin']:,.2f}".replace(",", ".")
-line += f"\n   💰 Total Value: Rp {format_rupiah(depth['buy_total_value'])}"
+            # BUY (FIXED INDENTATION)
+            line += f"\n\n🟩 BUY"
+            line += f"\n   🔻 Bottom Price: Rp {format_rupiah(depth['buy_bottom_price'])}"
+            line += f"\n   🪙 Total Buy: {depth['buy_total_coin']:,.2f}".replace(",", ".")
+            line += f"\n   💰 Total Value: Rp {format_rupiah(depth['buy_total_value'])}"
 
+            line += f"\n   🧱 Strongest Wall:"
+            line += f"\n      Price: Rp {format_rupiah(depth['buy_strong_price'])}"
+            line += f"\n      Volume: {depth['buy_strong_coin']:,.2f}".replace(",", ".")
+            line += f"\n      Value: Rp {format_rupiah(depth['buy_strong_value'])}"
 
-line += f"\n   🧱 Strongest Wall:"
-line += f"\n      Price: Rp {format_rupiah(depth['buy_strong_price'])}"
-line += f"\n      Volume  : {depth['buy_strong_coin']:,.2f}".replace(",", ".")
-line += f"\n      Value  : Rp {format_rupiah(depth['buy_strong_value'])}"
-
+            # RESISTANCE / SUPPORT
             if depth["res"]:
                 p, v, val = depth["res"]
                 line += f"\n\n🚧 Nearest Resistance"
                 line += f"\n   Price: Rp {format_rupiah(p)}"
-                line += f"\n   Volume  : {v:,.2f}".replace(",", ".")
-                line += f"\n   Value  : Rp {format_rupiah(val)}"
+                line += f"\n   Volume: {v:,.2f}".replace(",", ".")
+                line += f"\n   Value: Rp {format_rupiah(val)}"
 
             if depth["sup"]:
                 p, v, val = depth["sup"]
-                line += f"\n\n🛡️  Nearest Support"
+                line += f"\n\n🛡️ Nearest Support"
                 line += f"\n   Price: Rp {format_rupiah(p)}"
-                line += f"\n   Volume  : {v:,.2f}".replace(",", ".")
-                line += f"\n   Value  : Rp {format_rupiah(val)}"
+                line += f"\n   Volume: {v:,.2f}".replace(",", ".")
+                line += f"\n   Value: Rp {format_rupiah(val)}"
 
             signal = get_signal(depth['buy_total_value'], depth['sell_total_value'])
             line += f"\n\n📈 Signal: {signal}"
