@@ -12,16 +12,13 @@ BOT_TOKEN = os.getenv("BOT_TOKEN","8726552111:AAGPZ-DlKsfF4uP57OIK3k7mpWO8QjOCjb
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN is missing!")
 
-CHAT_IDS = [-1003931797952]
+CHAT_IDS = [8495972050, -5280540812, -1003931797952]
 
 COINS = {
     "DRX": "drxidr",
     "CST": "cstidr",
     "ANOA": "anoaidr"
 }
-
-THRESHOLD = 5
-last_prices = {}
 
 # =========================
 # FORMAT
@@ -35,10 +32,39 @@ def format_rupiah(value):
 def get_price(pair):
     try:
         r = requests.get(f"https://indodax.com/api/ticker/{pair}", timeout=10)
-        data = r.json()
-        return float(data["ticker"]["last"])
+        return float(r.json()["ticker"]["last"])
     except:
         return None
+
+# =========================
+# FILTER LEVEL
+# =========================
+def filter_levels(levels, current_price, is_resistance=True):
+    candidates_50 = []
+    candidates_20 = []
+
+    for price, amount in levels:
+        price = float(price)
+        amount = float(amount)
+        value = price * amount
+
+        if is_resistance and price <= current_price:
+            continue
+        if not is_resistance and price >= current_price:
+            continue
+
+        if value >= 50_000_000:
+            candidates_50.append((price, amount, value))
+        elif value >= 20_000_000:
+            candidates_20.append((price, amount, value))
+
+    if candidates_50:
+        return min(candidates_50, key=lambda x: x[0]) if is_resistance else max(candidates_50, key=lambda x: x[0])
+
+    if candidates_20:
+        return min(candidates_20, key=lambda x: x[0]) if is_resistance else max(candidates_20, key=lambda x: x[0])
+
+    return None
 
 # =========================
 # MARKET DEPTH
@@ -51,18 +77,9 @@ def get_market_depth(pair, current_price):
         sell = data.get("sell", [])
         buy = data.get("buy", [])
 
-        # ===== SELL =====
-        sell_total_coin = 0
-        sell_total_value = 0
+        sell_total_coin = sell_total_value = 0
         sell_top_price = 0
-
-        sell_strong_price = 0
-        sell_strong_coin = 0
-        sell_strong_value = 0
-
-        nearest_res_price = None
-        nearest_res_value = 0
-        nearest_res_coin = 0
+        sell_strong_price = sell_strong_coin = sell_strong_value = 0
 
         for price, amount in sell:
             price = float(price)
@@ -80,26 +97,9 @@ def get_market_depth(pair, current_price):
                 sell_strong_price = price
                 sell_strong_coin = amount
 
-            if price > current_price:
-                if nearest_res_price is None or price < nearest_res_price:
-                    nearest_res_price = price
-                    nearest_res_value = value
-                    nearest_res_coin = amount
-
-        # ===== BUY =====
-        buy_total_coin = 0
-        buy_total_value = 0
-
-        buy_top_price = 0
+        buy_total_coin = buy_total_value = 0
         buy_bottom_price = float("inf")
-
-        buy_strong_price = 0
-        buy_strong_coin = 0
-        buy_strong_value = 0
-
-        nearest_sup_price = None
-        nearest_sup_value = 0
-        nearest_sup_coin = 0
+        buy_strong_price = buy_strong_coin = buy_strong_value = 0
 
         for price, amount in buy:
             price = float(price)
@@ -109,9 +109,6 @@ def get_market_depth(pair, current_price):
             buy_total_coin += amount
             buy_total_value += value
 
-            if price > buy_top_price:
-                buy_top_price = price
-
             if price < buy_bottom_price:
                 buy_bottom_price = price
 
@@ -120,11 +117,8 @@ def get_market_depth(pair, current_price):
                 buy_strong_price = price
                 buy_strong_coin = amount
 
-            if price < current_price:
-                if nearest_sup_price is None or price > nearest_sup_price:
-                    nearest_sup_price = price
-                    nearest_sup_value = value
-                    nearest_sup_coin = amount
+        res = filter_levels(sell, current_price, True)
+        sup = filter_levels(buy, current_price, False)
 
         return {
             "sell_total_coin": sell_total_coin,
@@ -136,19 +130,13 @@ def get_market_depth(pair, current_price):
 
             "buy_total_coin": buy_total_coin,
             "buy_total_value": buy_total_value,
-            "buy_top_price": buy_top_price,
             "buy_bottom_price": buy_bottom_price,
             "buy_strong_price": buy_strong_price,
             "buy_strong_coin": buy_strong_coin,
             "buy_strong_value": buy_strong_value,
 
-            "res_price": nearest_res_price,
-            "res_value": nearest_res_value,
-            "res_coin": nearest_res_coin,
-
-            "sup_price": nearest_sup_price,
-            "sup_value": nearest_sup_value,
-            "sup_coin": nearest_sup_coin
+            "res": res,
+            "sup": sup
         }
 
     except Exception as e:
@@ -174,117 +162,86 @@ def send_telegram(message):
         try:
             requests.post(
                 f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-                data={"chat_id": chat_id, "text": message},
+                data={
+                    "chat_id": chat_id,
+                    "text": message,
+                    "parse_mode": "HTML"
+                },
                 timeout=10
             )
         except Exception as e:
             print("Telegram error:", e)
 
 # =========================
-# CHANGE %
-# =========================
-def calc_change(old, new):
-    if old is None:
-        return 0
-    return ((new - old) / old) * 100
-
-# =========================
 # MAIN
 # =========================
 def job():
-    global last_prices
-
     wib = pytz.timezone("Asia/Jakarta")
     timestamp = datetime.now(wib).strftime("%Y-%m-%d %H:%M")
 
-    message = f"📊 Indodax Update\n⏰ {timestamp}\n\n"
-
-    new_prices = {}
-    alert_triggered = False
+    message = f"📊 <b>Indodax Update</b>\n⏰ {timestamp}\n\n"
 
     for coin, pair in COINS.items():
         price = get_price(pair)
 
         if not price:
-            message += f"{coin}: error\n\n"
             continue
-
-        old_price = last_prices.get(coin)
-        change = calc_change(old_price, price)
 
         depth = get_market_depth(pair, price)
 
-        line = f"{coin}: Rp {format_rupiah(price)}"
-
-        if old_price:
-            line += f" ({change:.2f}%)"
-
-            if change >= THRESHOLD:
-                line += " 🚀 +5%"
-                alert_triggered = True
-            elif change <= -THRESHOLD:
-                line += " 🔻 -5%"
-                alert_triggered = True
+        # 🔥 BIG & BOLD HEADER
+        line = f"🔷 <b>{coin}</b>\n"
+        line += f"💰 <b>Rp {format_rupiah(price)}</b>\n"
 
         if depth:
-            # SELL
             line += f"\n🟥 SELL"
-            line += f"\n   🧱 Top Sell Price: Rp {format_rupiah(depth['sell_top_price'])}"
+            line += f"\n   🧱 Top Price: Rp {format_rupiah(depth['sell_top_price'])}"
             line += f"\n   🪙 Total Sell: {depth['sell_total_coin']:,.2f}".replace(",", ".")
             line += f"\n   💰 Total Value: Rp {format_rupiah(depth['sell_total_value'])}"
+
             line += f"\n   🧱 Strongest Wall:"
             line += f"\n      Price: Rp {format_rupiah(depth['sell_strong_price'])}"
             line += f"\n      Volume  : {depth['sell_strong_coin']:,.2f}".replace(",", ".")
             line += f"\n      Value  : Rp {format_rupiah(depth['sell_strong_value'])}"
 
-            # BUY
-            line += f"\n🟩 BUY"
-            line += f"\n   🔝 Top Buy (Highest): Rp {format_rupiah(depth['buy_top_price'])}"
-            line += f"\n   🔻 Bottom Buy (Lowest): Rp {format_rupiah(depth['buy_bottom_price'])}"
-            line += f"\n   🪙 Total Buy: {depth['buy_total_coin']:,.2f}".replace(",", ".")
-            line += f"\n   💰 Total Value: Rp {format_rupiah(depth['buy_total_value'])}"
-            line += f"\n   🧱 Strongest Wall:"
-            line += f"\n      Price: Rp {format_rupiah(depth['buy_strong_price'])}"
-            line += f"\n      Volume  : {depth['buy_strong_coin']:,.2f}".replace(",", ".")
-            line += f"\n      Value  : Rp {format_rupiah(depth['buy_strong_value'])}"
+   
+line += f"\n\n🟩 BUY"
+line += f"\n   🔻 Bottom Price: Rp {format_rupiah(depth['buy_bottom_price'])}"
+line += f"\n   🪙 Total Buy: {depth['buy_total_coin']:,.2f}".replace(",", ".")
+line += f"\n   💰 Total Value: Rp {format_rupiah(depth['buy_total_value'])}"
 
-            # RESISTANCE
-            if depth["res_price"]:
-                line += f"\n🚧 Resistance (Nearest)"
-                line += f"\n   Price: Rp {format_rupiah(depth['res_price'])}"
-                line += f"\n   Vol  : {depth['res_coin']:,.2f}".replace(",", ".")
-                line += f"\n   Val  : Rp {format_rupiah(depth['res_value'])}"
 
-            # SUPPORT
-            if depth["sup_price"]:
-                line += f"\n🛡️ Support (Nearest)"
-                line += f"\n   Price: Rp {format_rupiah(depth['sup_price'])}"
-                line += f"\n   Vol  : {depth['sup_coin']:,.2f}".replace(",", ".")
-                line += f"\n   Val  : Rp {format_rupiah(depth['sup_value'])}"
+line += f"\n   🧱 Strongest Wall:"
+line += f"\n      Price: Rp {format_rupiah(depth['buy_strong_price'])}"
+line += f"\n      Volume  : {depth['buy_strong_coin']:,.2f}".replace(",", ".")
+line += f"\n      Value  : Rp {format_rupiah(depth['buy_strong_value'])}"
 
-            # SIGNAL
+            if depth["res"]:
+                p, v, val = depth["res"]
+                line += f"\n\n🚧 Nearest Resistance"
+                line += f"\n   Price: Rp {format_rupiah(p)}"
+                line += f"\n   Volume  : {v:,.2f}".replace(",", ".")
+                line += f"\n   Value  : Rp {format_rupiah(val)}"
+
+            if depth["sup"]:
+                p, v, val = depth["sup"]
+                line += f"\n\n🛡️  Nearest Support"
+                line += f"\n   Price: Rp {format_rupiah(p)}"
+                line += f"\n   Volume  : {v:,.2f}".replace(",", ".")
+                line += f"\n   Value  : Rp {format_rupiah(val)}"
+
             signal = get_signal(depth['buy_total_value'], depth['sell_total_value'])
-            line += f"\n📈 Signal: {signal}"
+            line += f"\n\n📈 Signal: {signal}"
 
         message += line + "\n\n"
-        new_prices[coin] = price
 
-    print(message)
     send_telegram(message)
-
-    if alert_triggered:
-        send_telegram("🚨 PRICE ALERT 🚨\n\n" + message)
-
-    last_prices = new_prices
 
 # =========================
 # LOOP
 # =========================
 if __name__ == "__main__":
-    print("Bot started...\n")
-
     job()
-
     while True:
-        time.sleep(3600)
+        time.sleep(1800)
         job()
