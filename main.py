@@ -7,7 +7,7 @@ import time
 # =========================
 # CONFIG
 # =========================
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8726552111:AAGPZ-DlKsfF4uP57OIK3k7mpWO8QjOCjbs")
+BOT_TOKEN = os.getenv("BOT_TOKEN","8726552111:AAGPZ-DlKsfF4uP57OIK3k7mpWO8QjOCjbs")
 
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN is missing!")
@@ -19,6 +19,13 @@ COINS = {
     "CST": "cstidr",
     "ANOA": "anoaidr"
 }
+
+# =========================
+# MEMORY
+# =========================
+trade_store = {pair: [] for pair in COINS.values()}
+price_history = {pair: [] for pair in COINS.values()}
+last_report_time = 0
 
 # =========================
 # FORMAT
@@ -38,6 +45,90 @@ def get_price(pair):
         return float(r.json()["ticker"]["last"])
     except:
         return None
+
+# =========================
+# PRICE HISTORY (6H)
+# =========================
+def update_price_history(pair, price):
+    now = time.time()
+    price_history[pair].append((now, price))
+    cutoff = now - 21600  # 6 hours
+    price_history[pair] = [p for p in price_history[pair] if p[0] >= cutoff]
+
+def get_6h_change(pair, current_price):
+    history = price_history.get(pair, [])
+    if not history:
+        return 0
+    oldest_price = history[0][1]
+    if oldest_price == 0:
+        return 0
+    return ((current_price - oldest_price) / oldest_price) * 100
+
+# =========================
+# TRADE STORE (6H)
+# =========================
+def update_trade_store(pair):
+    try:
+        r = requests.get(f"https://indodax.com/api/trades/{pair}", timeout=10)
+        trades = r.json()
+        now = time.time()
+
+        for t in trades:
+            trade_time = int(t["date"])
+            price = float(t["price"])
+            amount = float(t["amount"])
+            trade_store[pair].append((trade_time, price, amount))
+
+        cutoff = now - 21600  # 6 hours
+        trade_store[pair] = [t for t in trade_store[pair] if t[0] >= cutoff]
+
+    except Exception as e:
+        print("Trade error:", e)
+
+# =========================
+# MOST TRADED (6H)
+# =========================
+def get_most_traded_6h(pair):
+    trades = trade_store.get(pair, [])
+    volume_map = {}
+
+    for _, price, amount in trades:
+        volume_map[price] = volume_map.get(price, 0) + amount
+
+    if not volume_map:
+        return None, None
+
+    best_price = max(volume_map, key=volume_map.get)
+    return best_price, volume_map[best_price]
+
+# =========================
+# 🐋 WHALE DETECTION (5 MIN)
+# =========================
+def detect_whale(pair, current_price):
+    trades = trade_store.get(pair, [])
+    now = time.time()
+
+    recent = [t for t in trades if t[0] >= now - 300]
+
+    volume_map = {}
+
+    for _, price, amount in recent:
+        value = price * amount
+        volume_map[price] = volume_map.get(price, 0) + value
+
+    if not volume_map:
+        return None
+
+    whale_price = max(volume_map, key=volume_map.get)
+    whale_value = volume_map[whale_price]
+
+    if whale_value < 100_000_000:
+        return None
+
+    if whale_price <= current_price:
+        return f"🟢 Whale BUY @ Rp {format_rupiah(whale_price)} (Rp {format_rupiah(whale_value)})"
+    else:
+        return f"🔴 Whale SELL @ Rp {format_rupiah(whale_price)} (Rp {format_rupiah(whale_value)})"
 
 # =========================
 # FILTER LEVEL
@@ -80,7 +171,6 @@ def get_market_depth(pair, current_price):
         sell = data.get("sell", [])
         buy = data.get("buy", [])
 
-        # SELL
         sell_total_coin = sell_total_value = 0
         sell_top_price = 0
         sell_strong_price = sell_strong_coin = sell_strong_value = 0
@@ -101,7 +191,6 @@ def get_market_depth(pair, current_price):
                 sell_strong_price = price
                 sell_strong_coin = amount
 
-        # BUY
         buy_total_coin = buy_total_value = 0
         buy_bottom_price = float("inf")
         buy_strong_price = buy_strong_coin = buy_strong_value = 0
@@ -132,14 +221,12 @@ def get_market_depth(pair, current_price):
             "sell_strong_price": sell_strong_price,
             "sell_strong_coin": sell_strong_coin,
             "sell_strong_value": sell_strong_value,
-
             "buy_total_coin": buy_total_coin,
             "buy_total_value": buy_total_value,
             "buy_bottom_price": buy_bottom_price,
             "buy_strong_price": buy_strong_price,
             "buy_strong_coin": buy_strong_coin,
             "buy_strong_value": buy_strong_value,
-
             "res": res,
             "sup": sup
         }
@@ -165,74 +252,79 @@ def get_signal(buy_value, sell_value):
 def send_telegram(message):
     for chat_id in CHAT_IDS:
         try:
-            requests.post(
+            r = requests.post(
                 f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-                data={
-                    "chat_id": chat_id,
-                    "text": message,
-                    "parse_mode": "HTML"
-                },
+                data={"chat_id": chat_id, "text": message, "parse_mode": "HTML"},
                 timeout=10
             )
+            print("Telegram:", r.text)
         except Exception as e:
             print("Telegram error:", e)
 
 # =========================
-# MAIN
+# REPORT
 # =========================
-def job():
+def send_report():
     wib = pytz.timezone("Asia/Jakarta")
-    timestamp = datetime.now(wib).strftime("%Y-%m-%d %H:%M")
+    timestamp = datetime.now(wib).strftime("%Y-%m-%d %H:%M:%S")
 
-    message = f"📊 <b>Indodax Update</b>\n⏰ {timestamp}\n\n"
+    message = f"📊 <b>Indodax 6H Full Report</b>\n⏰ {timestamp}\n\n"
 
     for coin, pair in COINS.items():
         price = get_price(pair)
-
         if not price:
             continue
 
+        update_price_history(pair, price)
+        change = get_6h_change(pair, price)
+
+        most_price, most_volume = get_most_traded_6h(pair)
         depth = get_market_depth(pair, price)
+        whale = detect_whale(pair, price)
 
         line = f"🔷 <b>{coin}</b>\n"
         line += f"💰 <b>Rp {format_rupiah(price)}</b>\n"
+        line += f"📊 6H Change: {change:+.2f}%\n"
+
+        if most_price:
+            line += f"📍 Most Traded: Rp {format_rupiah(most_price)} ({most_volume:,.2f} coins)\n".replace(",", ".")
+
+        if whale:
+            line += f"\n🐋 {whale}\n"
 
         if depth:
-            # SELL
             line += f"\n🟥 SELL"
             line += f"\n   🧱 Top Price: Rp {format_rupiah(depth['sell_top_price'])}"
-            line += f"\n   🪙 Total Sell: {depth['sell_total_coin']:,.2f}".replace(",", ".")
+            line += f"\n   🪙 Total Coin: {depth['sell_total_coin']:,.2f}".replace(",", ".")
             line += f"\n   💰 Total Value: Rp {format_rupiah(depth['sell_total_value'])}"
 
             line += f"\n   🧱 Strongest Wall:"
             line += f"\n      Price: Rp {format_rupiah(depth['sell_strong_price'])}"
-            line += f"\n      Volume: {depth['sell_strong_coin']:,.2f}".replace(",", ".")
+            line += f"\n      Coin: {depth['sell_strong_coin']:,.2f}".replace(",", ".")
             line += f"\n      Value: Rp {format_rupiah(depth['sell_strong_value'])}"
 
-            # BUY (FIXED INDENTATION)
             line += f"\n\n🟩 BUY"
             line += f"\n   🔻 Bottom Price: Rp {format_rupiah(depth['buy_bottom_price'])}"
-            line += f"\n   🪙 Total Buy: {depth['buy_total_coin']:,.2f}".replace(",", ".")
+            line += f"\n   🪙 Total Coin: {depth['buy_total_coin']:,.2f}".replace(",", ".")
             line += f"\n   💰 Total Value: Rp {format_rupiah(depth['buy_total_value'])}"
 
             line += f"\n   🧱 Strongest Wall:"
             line += f"\n      Price: Rp {format_rupiah(depth['buy_strong_price'])}"
-            line += f"\n      Volume: {depth['buy_strong_coin']:,.2f}".replace(",", ".")
+            line += f"\n      Coin: {depth['buy_strong_coin']:,.2f}".replace(",", ".")
             line += f"\n      Value: Rp {format_rupiah(depth['buy_strong_value'])}"
 
-            # RESISTANCE / SUPPORT
             if depth["res"]:
                 p, v, val = depth["res"]
-                line += f"\n\n🚧 Nearest Resistance"
+                line += f"\n\n🚧 Resistance"
                 line += f"\n   Price: Rp {format_rupiah(p)}"
-                line += f"\n   Volume: {v:,.2f}".replace(",", ".")
+                line += f"\n   Coin: {v:,.2f}".replace(",", ".")
                 line += f"\n   Value: Rp {format_rupiah(val)}"
 
             if depth["sup"]:
                 p, v, val = depth["sup"]
-                line += f"\n\n🛡️ Nearest Support"
+                line += f"\n\n🛡️ Support"
                 line += f"\n   Price: Rp {format_rupiah(p)}"
-                line += f"\n   Volume: {v:,.2f}".replace(",", ".")
+                line += f"\n   Coin: {v:,.2f}".replace(",", ".")
                 line += f"\n   Value: Rp {format_rupiah(val)}"
 
             signal = get_signal(depth['buy_total_value'], depth['sell_total_value'])
@@ -243,10 +335,26 @@ def job():
     send_telegram(message)
 
 # =========================
-# LOOP
+# LOOP (6 HOURS REPORT)
+# =========================
+def loop():
+    global last_report_time
+
+    while True:
+        now = time.time()
+
+        for pair in COINS.values():
+            update_trade_store(pair)
+
+        if now - last_report_time >= 21600:  # 6 hours
+            send_report()
+            last_report_time = now
+
+        time.sleep(300)  # check every 5 min
+
+# =========================
+# START
 # =========================
 if __name__ == "__main__":
-    job()
-    while True:
-        time.sleep(1800)
-        job()
+    print("Bot started...")
+    loop()
