@@ -41,7 +41,7 @@ def get_price(pair):
         return None
 
 # =========================
-# MARKET DEPTH ANALYSIS
+# MARKET DEPTH
 # =========================
 def get_market_depth(pair, current_price):
     try:
@@ -80,7 +80,6 @@ def get_market_depth(pair, current_price):
                 sell_strong_price = price
                 sell_strong_coin = amount
 
-            # nearest resistance
             if price > current_price:
                 if nearest_res_price is None or price < nearest_res_price:
                     nearest_res_price = price
@@ -90,7 +89,9 @@ def get_market_depth(pair, current_price):
         # ===== BUY =====
         buy_total_coin = 0
         buy_total_value = 0
+
         buy_top_price = 0
+        buy_bottom_price = float("inf")
 
         buy_strong_price = 0
         buy_strong_coin = 0
@@ -111,12 +112,14 @@ def get_market_depth(pair, current_price):
             if price > buy_top_price:
                 buy_top_price = price
 
+            if price < buy_bottom_price:
+                buy_bottom_price = price
+
             if value > buy_strong_value:
                 buy_strong_value = value
                 buy_strong_price = price
                 buy_strong_coin = amount
 
-            # nearest support
             if price < current_price:
                 if nearest_sup_price is None or price > nearest_sup_price:
                     nearest_sup_price = price
@@ -134,6 +137,7 @@ def get_market_depth(pair, current_price):
             "buy_total_coin": buy_total_coin,
             "buy_total_value": buy_total_value,
             "buy_top_price": buy_top_price,
+            "buy_bottom_price": buy_bottom_price,
             "buy_strong_price": buy_strong_price,
             "buy_strong_coin": buy_strong_coin,
             "buy_strong_value": buy_strong_value,
@@ -185,7 +189,7 @@ def calc_change(old, new):
     return ((new - old) / old) * 100
 
 # =========================
-# MAIN JOB
+# MAIN
 # =========================
 def job():
     global last_prices
@@ -226,9 +230,8 @@ def job():
             # SELL
             line += f"\n🟥 SELL"
             line += f"\n   🧱 Top Sell Price: Rp {format_rupiah(depth['sell_top_price'])}"
-            line += f"\n   🪙 Total Coin Sell: {depth['sell_total_coin']:,.2f}".replace(",", ".")
+            line += f"\n   🪙 Total Sell: {depth['sell_total_coin']:,.2f}".replace(",", ".")
             line += f"\n   💰 Total Value: Rp {format_rupiah(depth['sell_total_value'])}"
-
             line += f"\n   🧱 Strongest Wall:"
             line += f"\n      Price: Rp {format_rupiah(depth['sell_strong_price'])}"
             line += f"\n      Volume  : {depth['sell_strong_coin']:,.2f}".replace(",", ".")
@@ -236,10 +239,10 @@ def job():
 
             # BUY
             line += f"\n🟩 BUY"
-            line += f"\n   🧱 Top Buy Price: Rp {format_rupiah(depth['buy_top_price'])}"
-            line += f"\n   🪙 Total Coin Buy: {depth['buy_total_coin']:,.2f}".replace(",", ".")
+            line += f"\n   🔝 Top Buy (Highest): Rp {format_rupiah(depth['buy_top_price'])}"
+            line += f"\n   🔻 Bottom Buy (Lowest): Rp {format_rupiah(depth['buy_bottom_price'])}"
+            line += f"\n   🪙 Total Buy: {depth['buy_total_coin']:,.2f}".replace(",", ".")
             line += f"\n   💰 Total Value: Rp {format_rupiah(depth['buy_total_value'])}"
-
             line += f"\n   🧱 Strongest Wall:"
             line += f"\n      Price: Rp {format_rupiah(depth['buy_strong_price'])}"
             line += f"\n      Volume  : {depth['buy_strong_coin']:,.2f}".replace(",", ".")
@@ -247,17 +250,17 @@ def job():
 
             # RESISTANCE
             if depth["res_price"]:
-                line += f"\n📍 Nearest Resistance:"
+                line += f"\n🚧 Resistance (Nearest)"
                 line += f"\n   Price: Rp {format_rupiah(depth['res_price'])}"
-                line += f"\n   Volume  : {depth['res_coin']:,.2f}".replace(",", ".")
-                line += f"\n   Value  : Rp {format_rupiah(depth['res_value'])}"
+                line += f"\n   Vol  : {depth['res_coin']:,.2f}".replace(",", ".")
+                line += f"\n   Val  : Rp {format_rupiah(depth['res_value'])}"
 
             # SUPPORT
             if depth["sup_price"]:
-                line += f"\n📍 Nearest Support:"
+                line += f"\n🛡️ Support (Nearest)"
                 line += f"\n   Price: Rp {format_rupiah(depth['sup_price'])}"
-                line += f"\n   Volume  : {depth['sup_coin']:,.2f}".replace(",", ".")
-                line += f"\n   Value  : Rp {format_rupiah(depth['sup_value'])}"
+                line += f"\n   Vol  : {depth['sup_coin']:,.2f}".replace(",", ".")
+                line += f"\n   Val  : Rp {format_rupiah(depth['sup_value'])}"
 
             # SIGNAL
             signal = get_signal(depth['buy_total_value'], depth['sell_total_value'])
@@ -283,5 +286,5 @@ if __name__ == "__main__":
     job()
 
     while True:
-        time.sleep(1800)
+        time.sleep(3600)
         job()
