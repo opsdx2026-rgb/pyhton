@@ -74,21 +74,36 @@ def get_6h_change(pair, current_price):
 
 
 # =========================
-# TRADE STORE (6H)
+# TRADE STORE (6H) ✅ FIXED (NO DUPLICATE)
 # =========================
+last_trade_id = {pair: 0 for pair in COINS.values()}
+
 def update_trade_store(pair):
+    global last_trade_id
+
     try:
         r = requests.get(f"https://indodax.com/api/trades/{pair}", timeout=10)
         trades = r.json()
         now = time.time()
 
         for t in trades:
+            trade_id = int(t["tid"])
+
+            # ✅ skip duplicates
+            if trade_id <= last_trade_id[pair]:
+                continue
+
             trade_time = int(t["date"])
             price = float(t["price"])
             amount = float(t["amount"])
+
             trade_store[pair].append((trade_time, price, amount))
 
-        cutoff = now - 21600  # 6 hours
+            # update latest ID
+            if trade_id > last_trade_id[pair]:
+                last_trade_id[pair] = trade_id
+
+        cutoff = now - 21600
         trade_store[pair] = [t for t in trade_store[pair] if t[0] >= cutoff]
 
     except Exception as e:
@@ -297,7 +312,7 @@ def send_report():
         line += f"📊 6H Change: {f'{change:+.2f}%' if change is not None else 'collecting...'}\n"
 
         if most_price:
-            line += f"📍 Most Traded: Rp {format_rupiah(most_price)} ({most_volume:,.2f} coins)\n".replace(",", ".")
+            line += f"📍 Most Traded: Rp {format_rupiah(most_price)} (Rp {format_rupiah(most_volume)})\n"
 
         if whale:
             line += f"\n🐋 {whale}\n"
