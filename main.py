@@ -294,7 +294,10 @@ def send_report():
 
         line = f"🔷 <b>{coin}</b>\n"
         line += f"💰 <b>Rp {format_rupiah(price)}</b>\n"
-        line += f"📊 6H Change: {change:+.2f}%\n"
+        if change is not None:
+            line += f"📊 6H Change: {change:+.2f}%\n"
+        else:
+            line += f"📊 6H Change: N/A (insufficient data)\n"
 
         if most_price:
             line += f"📍 Most Traded: Rp {format_rupiah(most_price)} ({most_volume:,.2f} coins)\n".replace(",", ".")
