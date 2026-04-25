@@ -36,6 +36,12 @@ def format_rupiah(value):
     except:
         return "0"
 
+def format_coin(value):
+    try:
+        return "{:,.2f}".format(value).replace(",", ".")
+    except:
+        return "0"
+
 # =========================
 # GET PRICE
 # =========================
