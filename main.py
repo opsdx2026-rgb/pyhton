@@ -52,17 +52,26 @@ def get_price(pair):
 def update_price_history(pair, price):
     now = time.time()
     price_history[pair].append((now, price))
-    cutoff = now - 21600  # 6 hours
+    cutoff = now - 21600
     price_history[pair] = [p for p in price_history[pair] if p[0] >= cutoff]
 
 def get_6h_change(pair, current_price):
     history = price_history.get(pair, [])
-    if not history:
-        return 0
-    oldest_price = history[0][1]
+
+    if len(history) < 2:
+        return None
+
+    oldest_time, oldest_price = history[0]
+
+    # ensure REAL 6H DATA
+    if time.time() - oldest_time < 21600:
+        return None
+
     if oldest_price == 0:
-        return 0
+        return None
+
     return ((current_price - oldest_price) / oldest_price) * 100
+
 
 # =========================
 # TRADE STORE (6H)
@@ -93,7 +102,8 @@ def get_most_traded_6h(pair):
     volume_map = {}
 
     for _, price, amount in trades:
-        volume_map[price] = volume_map.get(price, 0) + amount
+        value = price * amount   # ✅ FIX HERE
+        volume_map[price] = volume_map.get(price, 0) + value
 
     if not volume_map:
         return None, None
@@ -295,7 +305,7 @@ def send_report():
         if depth:
             line += f"\n🟥 SELL"
             line += f"\n   🧱 Top Price: Rp {format_rupiah(depth['sell_top_price'])}"
-            line += f"\n   🪙 Total Coin: {depth['sell_total_coin']:,.2f}".replace(",", ".")
+            line += f"\n   🪙 Total Offer Coin: {depth['sell_total_coin']:,.2f}".replace(",", ".")
             line += f"\n   💰 Total Value: Rp {format_rupiah(depth['sell_total_value'])}"
 
             line += f"\n   🧱 Strongest Wall:"
@@ -305,7 +315,7 @@ def send_report():
 
             line += f"\n\n🟩 BUY"
             line += f"\n   🔻 Bottom Price: Rp {format_rupiah(depth['buy_bottom_price'])}"
-            line += f"\n   🪙 Total Coin: {depth['buy_total_coin']:,.2f}".replace(",", ".")
+            line += f"\n   🪙 Total Bid Coin: {depth['buy_total_coin']:,.2f}".replace(",", ".")
             line += f"\n   💰 Total Value: Rp {format_rupiah(depth['buy_total_value'])}"
 
             line += f"\n   🧱 Strongest Wall:"
