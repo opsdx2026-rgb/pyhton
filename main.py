@@ -26,6 +26,7 @@ COINS = {
 trade_store = {pair: [] for pair in COINS.values()}
 price_history = {pair: [] for pair in COINS.values()}
 last_report_time = 0
+last_report_price = {pair: None for pair in COINS.values()}
 
 # =========================
 # FORMAT
@@ -53,7 +54,7 @@ def get_price(pair):
         return None
 
 # =========================
-# PRICE HISTORY (6H)
+# PRICE HISTORY (6H) (unused for change now, kept as-is)
 # =========================
 def update_price_history(pair, price):
     now = time.time()
@@ -69,7 +70,6 @@ def get_6h_change(pair, current_price):
 
     oldest_time, oldest_price = history[0]
 
-    # ensure REAL 6H DATA
     if time.time() - oldest_time < 21600:
         return None
 
@@ -78,9 +78,8 @@ def get_6h_change(pair, current_price):
 
     return ((current_price - oldest_price) / oldest_price) * 100
 
-
 # =========================
-# TRADE STORE (6H) ✅ FIXED (NO DUPLICATE)
+# TRADE STORE (6H)
 # =========================
 last_trade_id = {pair: 0 for pair in COINS.values()}
 
@@ -95,7 +94,6 @@ def update_trade_store(pair):
         for t in trades:
             trade_id = int(t["tid"])
 
-            # ✅ skip duplicates
             if trade_id <= last_trade_id[pair]:
                 continue
 
@@ -105,7 +103,6 @@ def update_trade_store(pair):
 
             trade_store[pair].append((trade_time, price, amount))
 
-            # update latest ID
             if trade_id > last_trade_id[pair]:
                 last_trade_id[pair] = trade_id
 
@@ -123,7 +120,7 @@ def get_most_traded_6h(pair):
     volume_map = {}
 
     for _, price, amount in trades:
-        value = price * amount   # ✅ FIX HERE
+        value = price * amount
         volume_map[price] = volume_map.get(price, 0) + value
 
     if not volume_map:
@@ -133,7 +130,7 @@ def get_most_traded_6h(pair):
     return best_price, volume_map[best_price]
 
 # =========================
-# 🐋 WHALE DETECTION (5 MIN)
+# WHALE DETECTION
 # =========================
 def detect_whale(pair, current_price):
     trades = trade_store.get(pair, [])
@@ -306,8 +303,19 @@ def send_report():
         if not price:
             continue
 
-        update_price_history(pair, price)
-        change = get_6h_change(pair, price)
+        prev_price = last_report_price[pair]
+
+        if prev_price is None:
+            change = None
+        else:
+            change = ((price - prev_price) / prev_price) * 100
+
+        alert = ""
+        if change is not None:
+            if change >= 5:
+                alert = "🚀 +5% BREAKOUT"
+            elif change <= -5:
+                alert = "⚠️ -5% DROP"
 
         most_price, most_volume = get_most_traded_6h(pair)
         depth = get_market_depth(pair, price)
@@ -315,7 +323,10 @@ def send_report():
 
         line = f"🔷 <b>{coin}</b>\n"
         line += f"💰 <b>Rp {format_rupiah(price)}</b>\n"
-        line += f"📊 6H Change: {f'{change:+.2f}%' if change is not None else 'collecting...'}\n"
+        line += f"📊 Change: {f'{change:+.2f}%' if change is not None else 'first data'}\n"
+
+        if alert:
+            line += f"{alert}\n"
 
         if most_price:
             line += f"📍 Most Traded: Rp {format_rupiah(most_price)} (Rp {format_rupiah(most_volume)})\n"
@@ -362,11 +373,12 @@ def send_report():
             line += f"\n\n📈 Signal: {signal}"
 
         message += line + "\n\n"
+        last_report_price[pair] = price
 
     send_telegram(message)
 
 # =========================
-# LOOP (6 HOURS REPORT)
+# LOOP
 # =========================
 def loop():
     global last_report_time
@@ -377,11 +389,11 @@ def loop():
         for pair in COINS.values():
             update_trade_store(pair)
 
-        if now - last_report_time >= 21600:  # 6 hours
+        if now - last_report_time >= 21600:
             send_report()
             last_report_time = now
 
-        time.sleep(300)  # check every 5 min
+        time.sleep(300)
 
 # =========================
 # START
