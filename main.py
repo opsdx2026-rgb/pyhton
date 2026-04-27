@@ -89,7 +89,7 @@ def get_token_tx(contract):
             "action": "tokentx",
             "contractaddress": contract,
             "page": 1,
-            "offset": 20,
+            "offset": 50,
             "sort": "desc",
             "apikey": ETHERSCAN_API_KEY
         }
@@ -109,7 +109,7 @@ def process_chain():
             tx_hash = tx.get("hash")
 
             if not tx_hash or tx_hash in seen_tx:
-                break
+                continue
 
             seen_tx.add(tx_hash)
 
@@ -151,15 +151,15 @@ def chain_report():
     global last_chain_report
     now = datetime.now(TIMEZONE)
 
-    if now.hour == 8 and now.minute == 0:
-        if last_chain_report["am"] != now.date():
-            generate_chain_report(now - timedelta(hours=12), now, "08:00 AM")
-            last_chain_report["am"] = now.date()
+    # Morning report (after 08:00, once)
+    if now.hour >= 8 and last_chain_report["am"] != now.date():
+        generate_chain_report(now - timedelta(hours=12), now, "08:00 AM")
+        last_chain_report["am"] = now.date()
 
-    if now.hour == 20 and now.minute == 0:
-        if last_chain_report["pm"] != now.date():
-            generate_chain_report(now - timedelta(hours=12), now, "08:00 PM")
-            last_chain_report["pm"] = now.date()
+    # Evening report (after 20:00, once)
+    if now.hour >= 20 and last_chain_report["pm"] != now.date():
+        generate_chain_report(now - timedelta(hours=12), now, "08:00 PM")
+        last_chain_report["pm"] = now.date()
 
 def generate_chain_report(start, end, label):
     data = [tx for tx in tx_log if start <= tx["time"] <= end]
@@ -172,12 +172,17 @@ def generate_chain_report(start, end, label):
         return
 
     totals = {}
+    counts = {}
+
     for tx in data:
-        totals.setdefault(tx["token"], 0)
-        totals[tx["token"]] += tx["amount"]
+        token = tx["token"]
+
+        totals[token] = totals.get(token, 0) + tx["amount"]
+        counts[token] = counts.get(token, 0) + 1
 
     for k, v in totals.items():
-        msg += f"{k}: {v:,.2f}\n"
+        count = counts.get(k, 0)
+        msg += f"{k}: {v:,.2f} ({count} tx)\n"
 
     msg += "\n🏆 <b>Top Transactions (Per Coin)</b>\n"
 
@@ -576,7 +581,11 @@ def loop():
 
     while True:
         now = time.time()
+        current_time = datetime.now(TIMEZONE)
 
+        # =========================
+        # REAL-TIME TASKS (EVERY LOOP)
+        # =========================
         for coin, pair in COINS.items():
             update_trade_store(pair)
 
@@ -585,16 +594,22 @@ def loop():
                 alert = check_price_alert(pair, coin, price)
                 if alert:
                     send_telegram(alert)
-                    
-current_time = datetime.now(TIMEZONE)
 
-# run every 6 hours exactly: 00:00, 06:00, 12:00, 18:00
-if current_time.hour % 6 == 0 and current_time.minute == 0:
-    if last_report_time != current_time.hour:
-        send_report()
-        last_report_time = current_time.hour
+            # =========================
+        # 6-HOUR PRICE REPORT
+        # =========================
+        if now - last_report_time >= 21600:  # 6 hours
+            send_report()
+            last_report_time = now
 
+        # =========================
+        # ON-CHAIN (RUN CONTINUOUSLY)
+        # =========================
         process_chain()
+
+        # =========================
+        # ON-CHAIN REPORT (2x DAILY)
+        # =========================
         chain_report()
 
         time.sleep(60)
