@@ -585,10 +585,14 @@ def loop():
                 alert = check_price_alert(pair, coin, price)
                 if alert:
                     send_telegram(alert)
+                    
+current_time = datetime.now(TIMEZONE)
 
-        if now - last_report_time >= 21600:
-            send_report()
-            last_report_time = now
+# run every 6 hours exactly: 00:00, 06:00, 12:00, 18:00
+if current_time.hour % 6 == 0 and current_time.minute == 0:
+    if last_report_time != current_time.hour:
+        send_report()
+        last_report_time = current_time.hour
 
         process_chain()
         chain_report()
