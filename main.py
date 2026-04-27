@@ -596,11 +596,13 @@ def loop():
                     send_telegram(alert)
 
             # =========================
-        # 6-HOUR PRICE REPORT
-        # =========================
-        if now - last_report_time >= 21600:  # 6 hours
-            send_report()
-            last_report_time = now
+       # =========================
+# 6-HOUR PRICE REPORT (FIXED TIME)
+# =========================
+if current_time.hour % 6 == 0 and current_time.minute == 0:
+    if last_report_time != current_time.hour:
+        send_report()
+        last_report_time = current_time.hour
 
         # =========================
         # ON-CHAIN (RUN CONTINUOUSLY)
