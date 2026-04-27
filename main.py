@@ -94,9 +94,16 @@ def get_token_tx(contract):
             "apikey": ETHERSCAN_API_KEY
         }
         res = requests.get(url, params=params, timeout=10).json()
-        return res.get("result", [])
+        result = res.get("result", [])
+        # Ensure result is a list, not a string error message
+        if isinstance(result, list):
+            return result
+        else:
+            print(f"Etherscan error: {result}")
+            return []
     except:
         return []
+
 
 # =========================
 # ETHERSCAN PROCESS
