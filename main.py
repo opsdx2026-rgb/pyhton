@@ -581,10 +581,10 @@ def loop():
 
     while True:
         now = time.time()
-        current_time = datetime.now(TIMEZONE)
+        current_time = datetime.now(TIMEZONE)  # ✅ MUST BE BEFORE USAGE
 
         # =========================
-        # REAL-TIME TASKS (EVERY LOOP)
+        # REAL-TIME TASKS
         # =========================
         for coin, pair in COINS.items():
             update_trade_store(pair)
@@ -595,23 +595,18 @@ def loop():
                 if alert:
                     send_telegram(alert)
 
-            # =========================
-       # =========================
-# 6-HOUR PRICE REPORT (FIXED TIME)
-# =========================
-if current_time.hour % 6 == 0 and current_time.minute == 0:
-    if last_report_time != current_time.hour:
-        send_report()
-        last_report_time = current_time.hour
+        # =========================
+        # ✅ 6-HOUR REPORT (FIXED)
+        # =========================
+        if current_time.hour % 6 == 0 and current_time.minute < 2:
+            if last_report_time != current_time.hour:
+                send_report()
+                last_report_time = current_time.hour
 
         # =========================
-        # ON-CHAIN (RUN CONTINUOUSLY)
+        # ON-CHAIN
         # =========================
         process_chain()
-
-        # =========================
-        # ON-CHAIN REPORT (2x DAILY)
-        # =========================
         chain_report()
 
         time.sleep(60)
