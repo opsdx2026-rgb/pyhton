@@ -55,6 +55,15 @@ last_report_price = {pair: None for pair in COINS.values()}
 last_alert_price = {pair: None for pair in COINS.values()}
 
 # =========================
+# FORMAT RUPIAH
+# =========================
+def format_rupiah(value):
+    try:
+        return f"{int(value):,}".replace(",", ".")
+    except:
+        return value
+
+# =========================
 # TELEGRAM (ONLY ONE)
 # =========================
 def send_telegram(message):
