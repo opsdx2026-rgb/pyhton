@@ -1,13 +1,14 @@
 import os
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 import time
 
 # =========================
 # CONFIG
 # =========================
-BOT_TOKEN = os.getenv("BOT_TOKEN","8726552111:AAGPZ-DlKsfF4uP57OIK3k7mpWO8QjOCjbs")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8726552111:AAGPZ-DlKsfF4uP57OIK3k7mpWO8QjOCjbs")
+ETHERSCAN_API_KEY = os.getenv("ETHERSCAN_API_KEY", "XFW92CINH8KKEVXWQUCVFNTNSJ21HHMRXA")
 
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN is missing!")
@@ -21,7 +22,31 @@ COINS = {
 }
 
 # =========================
-# MEMORY
+# ETHERSCAN CONFIG
+# =========================
+TOKENS = {
+    "DRX": {
+        "contract": "0x83f4389ccCe1CC044dD7441Add33c4F28b967434",
+        "min": 1_000_000
+    },
+    "ANOA": {
+        "contract": "0x44A8701fb5c8c22B90d839363e6C2B2C1a58A525",
+        "min": 150
+    },
+    "CST": {
+        "contract": "0x3c41C80B966b92d345Dc8FC91e5508BC7248da6E",
+        "min": 50
+    }
+}
+
+TIMEZONE = pytz.timezone("Asia/Jakarta")
+
+seen_tx = set()
+tx_log = []
+last_chain_report = {"am": None, "pm": None}
+
+# =========================
+# MEMORY (FIXED - REQUIRED)
 # =========================
 trade_store = {pair: [] for pair in COINS.values()}
 price_history = {pair: [] for pair in COINS.values()}
@@ -30,19 +55,142 @@ last_report_price = {pair: None for pair in COINS.values()}
 last_alert_price = {pair: None for pair in COINS.values()}
 
 # =========================
-# FORMAT
+# TELEGRAM (ONLY ONE)
 # =========================
-def format_rupiah(value):
-    try:
-        return f"{int(value):,}".replace(",", ".")
-    except:
-        return "0"
+def send_telegram(message):
+    for chat_id in CHAT_IDS:
+        try:
+            r = requests.post(
+                f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+                data={"chat_id": chat_id, "text": message, "parse_mode": "HTML"},
+                timeout=10
+            )
+            print("Telegram:", r.text)
+        except Exception as e:
+            print("Telegram error:", e)
 
-def format_coin(value):
+# =========================
+# ETHERSCAN FETCH
+# =========================
+def get_token_tx(contract):
     try:
-        return "{:,.2f}".format(value).replace(",", ".")
+        url = "https://api.etherscan.io/api"
+        params = {
+            "module": "account",
+            "action": "tokentx",
+            "contractaddress": contract,
+            "page": 1,
+            "offset": 20,
+            "sort": "desc",
+            "apikey": ETHERSCAN_API_KEY
+        }
+        res = requests.get(url, params=params, timeout=10).json()
+        return res.get("result", [])
     except:
-        return "0"
+        return []
+
+# =========================
+# ETHERSCAN PROCESS
+# =========================
+def process_chain():
+    for token, data in TOKENS.items():
+        txs = get_token_tx(data["contract"])
+
+        for tx in txs:
+            tx_hash = tx.get("hash")
+
+            if not tx_hash or tx_hash in seen_tx:
+                break
+
+            seen_tx.add(tx_hash)
+
+            try:
+                decimals = int(tx["tokenDecimal"])
+                amount = int(tx["value"]) / (10 ** decimals)
+            except:
+                continue
+
+            if amount < data["min"]:
+                continue
+
+            tx_time = datetime.fromtimestamp(int(tx["timeStamp"]), TIMEZONE)
+
+            tx_log.append({
+                "token": token,
+                "from": tx["from"],
+                "to": tx["to"],
+                "hash": tx_hash,
+                "time": tx_time,
+                "amount": amount
+            })
+
+            msg = f"""🚨 <b>{token} ON-CHAIN MOVEMENT</b>
+Amount : {amount:,.2f}
+From   : {tx["from"]}
+To     : {tx["to"]}
+Hash   : {tx_hash}
+Time   : {tx_time.strftime('%Y-%m-%d %H:%M:%S')}"""
+
+            send_telegram(msg)
+
+        time.sleep(0.3)
+
+# =========================
+# ETHERSCAN REPORT
+# =========================
+def chain_report():
+    global last_chain_report
+    now = datetime.now(TIMEZONE)
+
+    if now.hour == 8 and now.minute == 0:
+        if last_chain_report["am"] != now.date():
+            generate_chain_report(now - timedelta(hours=12), now, "08:00 AM")
+            last_chain_report["am"] = now.date()
+
+    if now.hour == 20 and now.minute == 0:
+        if last_chain_report["pm"] != now.date():
+            generate_chain_report(now - timedelta(hours=12), now, "08:00 PM")
+            last_chain_report["pm"] = now.date()
+
+def generate_chain_report(start, end, label):
+    data = [tx for tx in tx_log if start <= tx["time"] <= end]
+
+    msg = f"📊 <b>On-chain Report {label}</b>\n\n"
+
+    if not data:
+        msg += "No transaction"
+        send_telegram(msg)
+        return
+
+    totals = {}
+    for tx in data:
+        totals.setdefault(tx["token"], 0)
+        totals[tx["token"]] += tx["amount"]
+
+    for k, v in totals.items():
+        msg += f"{k}: {v:,.2f}\n"
+
+    msg += "\n🏆 <b>Top Transactions (Per Coin)</b>\n"
+
+    for token in TOKENS.keys():
+        token_txs = [tx for tx in data if tx["token"] == token]
+
+        msg += f"\n<b>{token}</b>\n"
+
+        if not token_txs:
+            msg += "No transaction\n"
+            continue
+
+        top5 = sorted(token_txs, key=lambda x: x["amount"], reverse=True)[:5]
+
+        for tx in top5:
+            msg += f"""\n{tx["amount"]:,.2f}
+From: {tx["from"]}
+To: {tx["to"]}
+Time: {tx["time"].strftime('%H:%M')}
+"""
+
+    send_telegram(msg)
 
 # =========================
 # GET PRICE
@@ -324,21 +472,6 @@ def get_signal(buy_value, sell_value):
         return "⚖️ NEUTRAL"
 
 # =========================
-# TELEGRAM
-# =========================
-def send_telegram(message):
-    for chat_id in CHAT_IDS:
-        try:
-            r = requests.post(
-                f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-                data={"chat_id": chat_id, "text": message, "parse_mode": "HTML"},
-                timeout=10
-            )
-            print("Telegram:", r.text)
-        except Exception as e:
-            print("Telegram error:", e)
-
-# =========================
 # REPORT
 # =========================
 def send_report():
@@ -427,7 +560,7 @@ def send_report():
     send_telegram(message)
 
 # =========================
-# LOOP
+# MAIN LOOP
 # =========================
 def loop():
     global last_report_time
@@ -438,23 +571,24 @@ def loop():
         for coin, pair in COINS.items():
             update_trade_store(pair)
 
-            # ✅ ADD THIS (alert engine)
             price = get_price(pair)
             if price:
                 alert = check_price_alert(pair, coin, price)
                 if alert:
                     send_telegram(alert)
 
-        # report every 6 hours (unchanged)
         if now - last_report_time >= 21600:
             send_report()
             last_report_time = now
 
-        time.sleep(300)
+        process_chain()
+        chain_report()
 
+        time.sleep(60)
+        
 # =========================
 # START
 # =========================
 if __name__ == "__main__":
-    print("Bot started...")
+    print("🚀 Multi-Engine Bot Started")
     loop()
