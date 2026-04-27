@@ -27,6 +27,7 @@ trade_store = {pair: [] for pair in COINS.values()}
 price_history = {pair: [] for pair in COINS.values()}
 last_report_time = 0
 last_report_price = {pair: None for pair in COINS.values()}
+last_alert_price = {pair: None for pair in COINS.values()}
 
 # =========================
 # FORMAT
@@ -52,6 +53,37 @@ def get_price(pair):
         return float(r.json()["ticker"]["last"])
     except:
         return None
+# =========================
+# 🚨 PRICE ALERT
+# =========================
+def check_price_alert(pair, coin, price):
+    prev = last_alert_price[pair]
+
+    if prev is None:
+        last_alert_price[pair] = price
+        return None
+
+    change = ((price - prev) / prev) * 100
+
+    # 🚨🚨 BIG ALERT ±10%
+    if change >= 10:
+        last_alert_price[pair] = price
+        return f"🚨🚨 <b>{coin} BIG BREAKOUT +{change:.2f}%</b>\n💰 Rp {format_rupiah(price)}"
+
+    elif change <= -10:
+        last_alert_price[pair] = price
+        return f"🚨🚨 <b>{coin} BIG DROP {change:.2f}%</b>\n💰 Rp {format_rupiah(price)}"
+
+    # 🚨 NORMAL ALERT ±5%
+    elif change >= 5:
+        last_alert_price[pair] = price
+        return f"🚀 <b>{coin}</b> BREAKOUT +{change:.2f}%\n💰 Rp {format_rupiah(price)}"
+
+    elif change <= -5:
+        last_alert_price[pair] = price
+        return f"⚠️ <b>{coin}</b> DROP {change:.2f}%\n💰 Rp {format_rupiah(price)}"
+
+    return None
 
 # =========================
 # PRICE HISTORY (6H) (unused for change now, kept as-is)
@@ -186,7 +218,24 @@ def filter_levels(levels, current_price, is_resistance=True):
     if candidates_20:
         return min(candidates_20, key=lambda x: x[0]) if is_resistance else max(candidates_20, key=lambda x: x[0])
 
+    # fallback: pick strongest even if small
+    if levels:
+        valid = []
+        for price, amount in levels:
+            price = float(price)
+            amount = float(amount)
+
+            if not is_resistance and price < current_price:
+                valid.append((price, amount, price * amount))
+
+            if is_resistance and price > current_price:
+                valid.append((price, amount, price * amount))
+
+        if valid:
+            return max(valid, key=lambda x: x[2])
+
     return None
+ 
 
 # =========================
 # MARKET DEPTH
@@ -386,9 +435,17 @@ def loop():
     while True:
         now = time.time()
 
-        for pair in COINS.values():
+        for coin, pair in COINS.items():
             update_trade_store(pair)
 
+            # ✅ ADD THIS (alert engine)
+            price = get_price(pair)
+            if price:
+                alert = check_price_alert(pair, coin, price)
+                if alert:
+                    send_telegram(alert)
+
+        # report every 6 hours (unchanged)
         if now - last_report_time >= 21600:
             send_report()
             last_report_time = now
