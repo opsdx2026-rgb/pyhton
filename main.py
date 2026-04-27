@@ -83,9 +83,11 @@ def send_telegram(message):
 # =========================
 def get_token_tx(contract):
     try:
-        url = "https://api.etherscan.io/api"
+        # ✅ V2 endpoint
+        url = "https://api.etherscan.io/v2/api"
+
         params = {
-            "module": "account",
+            "chainid": 1,  # Ethereum mainnet
             "action": "tokentx",
             "contractaddress": contract,
             "page": 1,
@@ -93,15 +95,25 @@ def get_token_tx(contract):
             "sort": "desc",
             "apikey": ETHERSCAN_API_KEY
         }
+
         res = requests.get(url, params=params, timeout=10).json()
+
+        # ✅ Handle API errors safely
+        if res.get("status") != "1":
+            print(f"Etherscan error: {res.get('message')} | {res.get('result')}")
+            return []
+
         result = res.get("result", [])
-        # Ensure result is a list, not a string error message
+
+        # ✅ Ensure it's a list (fix your crash)
         if isinstance(result, list):
             return result
         else:
-            print(f"Etherscan error: {result}")
+            print(f"Etherscan unexpected response: {result}")
             return []
-    except:
+
+    except Exception as e:
+        print("Etherscan fetch error:", e)
         return []
 
 
