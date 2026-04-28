@@ -7,6 +7,7 @@ import time
 # =========================
 # CONFIG
 # =========================
+BOT_START_TIME = datetime.now(TIMEZONE)
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8726552111:AAGPZ-DlKsfF4uP57OIK3k7mpWO8QjOCjbs")
 ETHERSCAN_API_KEY = os.getenv("ETHERSCAN_API_KEY", "XFW92CINH8KKEVXWQUCVFNTNSJ21HHMRXA")
 
@@ -181,7 +182,11 @@ def process_chain():
             if amount < data["min"]:
                 continue
 
-            tx_time = datetime.fromtimestamp(int(tx["timeStamp"]), TIMEZONE)
+           tx_time = datetime.fromtimestamp(int(tx["timeStamp"]), TIMEZONE)
+
+        # 🚨 IGNORE OLD TRANSACTIONS (BEFORE BOT START)
+        if tx_time < BOT_START_TIME:
+            continue
 
             tx_log.append({
                 "token": token,
