@@ -7,7 +7,6 @@ import time
 # =========================
 # CONFIG
 # =========================
-BOT_START_TIME = datetime.now(TIMEZONE)
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8726552111:AAGPZ-DlKsfF4uP57OIK3k7mpWO8QjOCjbs")
 ETHERSCAN_API_KEY = os.getenv("ETHERSCAN_API_KEY", "XFW92CINH8KKEVXWQUCVFNTNSJ21HHMRXA")
 
@@ -41,6 +40,7 @@ TOKENS = {
 }
 
 TIMEZONE = pytz.timezone("Asia/Jakarta")
+BOT_START_TIME = datetime.now(TIMEZONE)
 
 seen_tx = set()
 tx_log = []
@@ -171,8 +171,6 @@ def process_chain():
             if not tx_hash or tx_hash in seen_tx:
                 continue
 
-            seen_tx.add(tx_hash)
-
             try:
                 decimals = int(tx["tokenDecimal"])
                 amount = int(tx["value"]) / (10 ** decimals)
@@ -182,11 +180,14 @@ def process_chain():
             if amount < data["min"]:
                 continue
 
-           tx_time = datetime.fromtimestamp(int(tx["timeStamp"]), TIMEZONE)
+            tx_time = datetime.fromtimestamp(int(tx["timeStamp"]), TIMEZONE)
 
-        # 🚨 IGNORE OLD TRANSACTIONS (BEFORE BOT START)
-        if tx_time < BOT_START_TIME:
-            continue
+            # 🚨 IGNORE OLD TRANSACTIONS (BEFORE BOT START)
+            if tx_time < BOT_START_TIME:
+                continue
+
+            # ✅ mark as seen ONLY after passing filter
+            seen_tx.add(tx_hash)
 
             tx_log.append({
                 "token": token,
