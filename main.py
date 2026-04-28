@@ -91,7 +91,7 @@ def get_token_tx(contract):
             "action": "tokentx",
             "contractaddress": contract,
             "page": 1,
-            "offset": 50,
+            "offset": 200,
             "sort": "desc",
             "apikey": ETHERSCAN_API_KEY
         }
@@ -113,6 +113,43 @@ def get_token_tx(contract):
     except Exception as e:
         print("Etherscan fetch error:", e)
         return []
+       def fetch_report_data(start, end):
+    report_data = []
+
+    for token, data in TOKENS.items():
+        txs = get_token_tx(data["contract"])
+
+        for tx in txs:
+            try:
+                decimals = int(tx["tokenDecimal"])
+                amount = int(tx["value"]) / (10 ** decimals)
+                tx_time = datetime.fromtimestamp(int(tx["timeStamp"]), TIMEZONE)
+            except:
+                continue
+
+            # ❌ NO MIN FILTER HERE (IMPORTANT)
+
+            if start <= tx_time <= end:
+                report_data.append({
+                    "token": token,
+                    "from": tx["from"],
+                    "to": tx["to"],
+                    "hash": tx["hash"],
+                    "time": tx_time,
+                    "amount": amount
+                })
+
+    return report_data
+   
+    def get_fixed_window(now, label):
+    if label == "08:00 AM":
+        start = now.replace(hour=20, minute=0, second=0, microsecond=0) - timedelta(days=1)
+        end = now.replace(hour=8, minute=0, second=0, microsecond=0)
+    else:
+        start = now.replace(hour=8, minute=0, second=0, microsecond=0)
+        end = now.replace(hour=20, minute=0, second=0, microsecond=0)
+
+    return start, end
 
 
 # =========================
@@ -168,18 +205,20 @@ def chain_report():
     global last_chain_report
     now = datetime.now(TIMEZONE)
 
-    # Morning report (after 08:00, once)
+    # 08:00 AM report
     if now.hour >= 8 and last_chain_report["am"] != now.date():
-        generate_chain_report(now - timedelta(hours=12), now, "08:00 AM")
+        start, end = get_fixed_window(now, "08:00 AM")
+        generate_chain_report(start, end, "08:00 AM")
         last_chain_report["am"] = now.date()
 
-    # Evening report (after 20:00, once)
+    # 08:00 PM report
     if now.hour >= 20 and last_chain_report["pm"] != now.date():
-        generate_chain_report(now - timedelta(hours=12), now, "08:00 PM")
+        start, end = get_fixed_window(now, "08:00 PM")
+        generate_chain_report(start, end, "08:00 PM")
         last_chain_report["pm"] = now.date()
 
 def generate_chain_report(start, end, label):
-    data = [tx for tx in tx_log if start <= tx["time"] <= end]
+    data = fetch_report_data(start, end)
 
     msg = f"📊 <b>On-chain Report {label}</b>\n\n"
 
