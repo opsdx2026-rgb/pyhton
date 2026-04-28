@@ -113,13 +113,16 @@ def get_token_tx(contract):
     except Exception as e:
         print("Etherscan fetch error:", e)
         return []
-       def fetch_report_data(start, end):
+
+
+def fetch_report_data(start, end):
     report_data = []
 
     for token, data in TOKENS.items():
         txs = get_token_tx(data["contract"])
 
         for tx in txs:
+
             try:
                 decimals = int(tx["tokenDecimal"])
                 amount = int(tx["value"]) / (10 ** decimals)
@@ -140,8 +143,9 @@ def get_token_tx(contract):
                 })
 
     return report_data
-   
-    def get_fixed_window(now, label):
+
+
+def get_fixed_window(now, label):
     if label == "08:00 AM":
         start = now.replace(hour=20, minute=0, second=0, microsecond=0) - timedelta(days=1)
         end = now.replace(hour=8, minute=0, second=0, microsecond=0)
@@ -157,6 +161,7 @@ def get_token_tx(contract):
 # =========================
 def process_chain():
     for token, data in TOKENS.items():
+
         txs = get_token_tx(data["contract"])
 
         for tx in txs:
