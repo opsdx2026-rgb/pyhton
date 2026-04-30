@@ -276,12 +276,23 @@ Time: {tx["time"].strftime('%H:%M')}
 # =========================
 # GET PRICE
 # =========================
-def get_price(pair):
+def get_price_data(pair):
     try:
         r = requests.get(f"https://indodax.com/api/ticker/{pair}", timeout=10)
-        return float(r.json()["ticker"]["last"])
+        t = r.json()["ticker"]
+
+        return {
+            "last": float(t["last"]),
+            "high": float(t["high"]),
+            "low": float(t["low"]),
+            "vol_coin": float(t[f"vol_{pair[:-3]}"]),
+            "vol_idr": float(t["vol_idr"])
+        }
     except:
         return None
+def get_price(pair):
+    data = get_price_data(pair)
+    return data["last"] if data else None
 # =========================
 # 🚨 PRICE ALERT
 # =========================
@@ -562,9 +573,15 @@ def send_report():
     message = f"📊 <b>Indodax 6H Full Report</b>\n⏰ {timestamp}\n\n"
 
     for coin, pair in COINS.items():
-        price = get_price(pair)
-        if not price:
+        data = get_price_data(pair)
+        if not data:
             continue
+
+        price = data["last"]
+        high_24h = data["high"]
+        low_24h = data["low"]
+        vol_coin = data["vol_coin"]
+        vol_idr = data["vol_idr"]
 
         prev_price = last_report_price[pair]
 
@@ -586,6 +603,11 @@ def send_report():
 
         line = f"🔷 <b>{coin}</b>\n"
         line += f"💰 <b>Rp {format_rupiah(price)}</b>\n"
+        line += f"\n📊 <b>24H Stats</b>"
+        line += f"\n⬆️ High: Rp {format_rupiah(high_24h)}"
+        line += f"\n⬇️ Low : Rp {format_rupiah(low_24h)}"
+        line += f"\n🪙 Volume Coin: {vol_coin:,.2f}".replace(",", ".")
+        line += f"\n💵 Volume IDR : Rp {format_rupiah(vol_idr)}\n"
         line += f"📊 Change: {f'{change:+.2f}%' if change is not None else 'first data'}\n"
 
         if alert:
@@ -663,9 +685,9 @@ def loop():
                     send_telegram(alert)
 
         # =========================
-        # ✅ 6-HOUR REPORT (FIXED)
+        # ✅ REPORT SCHEDULE (08:00, 16:00, 00:00)
         # =========================
-        if current_time.hour % 6 == 0 and current_time.minute < 2:
+        if current_time.hour in [0, 8, 16] and current_time.minute < 2:
             if last_report_time != current_time.hour:
                 send_report()
                 last_report_time = current_time.hour
