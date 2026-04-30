@@ -921,8 +921,8 @@ def loop():
                 if alert_r:
                     send_telegram(alert_r)
 
-        # REPORT SCHEDULE
-        if current_time.hour in [0, 8, 16]:
+       # REPORT SCHEDULE (FIXED)
+        if current_time.hour in [0, 8, 16] and current_time.minute < 5:
             if last_report_time != current_time.hour:
                 send_report()
                 last_report_time = current_time.hour
@@ -937,4 +937,5 @@ def loop():
 # =========================
 if __name__ == "__main__":
     print("🚀 Multi-Engine Bot Started")
+    send_report () 
     loop()
