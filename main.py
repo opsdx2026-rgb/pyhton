@@ -598,25 +598,25 @@ def send_report():
             line += f"\n🐋 {whale}\n"
 
         if depth:
-            line += f"\n🟥 SELL"
-            line += f"\n   🧱 Top Price: Rp {format_rupiah(depth['sell_top_price'])}"
-            line += f"\n   🪙 Total Offer Coin: {depth['sell_total_coin']:,.2f}".replace(",", ".")
-            line += f"\n   💰 Total Value: Rp {format_rupiah(depth['sell_total_value'])}"
+        line += f"\n🟥 SELL"
+        line += f"\n   🧱 Top Price: Rp {format_rupiah(depth['sell_top_price'])}"
+        line += f"\n   🪙 Total Offer Coin: {depth['sell_total_coin']:,.2f}".replace(",", ".")
+        line += f"\n   💰 Total Value: Rp {format_rupiah(depth['sell_total_value'])}"
 
-            line += f"\n   🧱 Strongest Wall:"
-            line += f"\n      Price: Rp {format_rupiah(depth['sell_strong_price'])}"
-            line += f"\n      Coin: {depth['sell_strong_coin']:,.2f}".replace(",", ".")
-            line += f"\n      Value: Rp {format_rupiah(depth['sell_strong_value'])}"
+        line += f"\n   🧱 Strongest Wall:"
+        line += f"\n      Price: Rp {format_rupiah(depth['sell_strong_price'])}"
+        line += f"\n      Coin: {depth['sell_strong_coin']:,.2f}".replace(",", ".")
+        line += f"\n      Value: Rp {format_rupiah(depth['sell_strong_value'])}"
 
-            line += f"\n\n🟩 BUY"
-            line += f"\n   🔻 Bottom Price: Rp {format_rupiah(depth['buy_bottom_price'])}"
-            line += f"\n   🪙 Total Bid Coin: {depth['buy_total_coin']:,.2f}".replace(",", ".")
-            line += f"\n   💰 Total Value: Rp {format_rupiah(depth['buy_total_value'])}"
+        line += f"\n\n🟩 BUY"
+        line += f"\n   🔻 Bottom Price: Rp {format_rupiah(depth['buy_bottom_price'])}"
+        line += f"\n   🪙 Total Bid Coin: {depth['buy_total_coin']:,.2f}".replace(",", ".")
+        line += f"\n   💰 Total Value: Rp {format_rupiah(depth['buy_total_value'])}"
 
-            line += f"\n   🧱 Strongest Wall:"
-            line += f"\n      Price: Rp {format_rupiah(depth['buy_strong_price'])}"
-            line += f"\n      Coin: {depth['buy_strong_coin']:,.2f}".replace(",", ".")
-            line += f"\n      Value: Rp {format_rupiah(depth['buy_strong_value'])}"
+        line += f"\n   🧱 Strongest Wall:"
+        line += f"\n      Price: Rp {format_rupiah(depth['buy_strong_price'])}"
+        line += f"\n      Coin: {depth['buy_strong_coin']:,.2f}".replace(",", ".")
+        line += f"\n      Value: Rp {format_rupiah(depth['buy_strong_value'])}"
 
             if depth["res"]:
                 p, v, val = depth["res"]
