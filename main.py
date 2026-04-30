@@ -687,7 +687,7 @@ def loop():
         # =========================
         # ✅ REPORT SCHEDULE (08:00, 16:00, 00:00)
         # =========================
-        if current_time.hour in [0, 8, 16] and current_time.minute < 2:
+        if current_time.hour in [0, 8, 16]:
             if last_report_time != current_time.hour:
                 send_report()
                 last_report_time = current_time.hour
