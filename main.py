@@ -29,9 +29,11 @@ REKU_SYMBOLS = {
     "CST": "CST",
     "ANOA": "ANOA"
 }
-
+# ✅ ADD THIS RIGHT HERE
 last_reku_price = {k: None for k in REKU_SYMBOLS}
 last_reku_alert = {k: None for k in REKU_SYMBOLS}
+        
+
 # =========================
 # ETHERSCAN CONFIG
 # =========================
@@ -288,31 +290,61 @@ Time: {tx["time"].strftime('%H:%M')}
 # REKU FUNCTION
 # =========================
 
-def get_reku_market(symbol):
-    try:
-        url = f"https://api.reku.id/v1/market/ticker/{symbol}_IDR"
-        r = requests.get(url, timeout=10).json()
-        d = r.get("data", {})
+REKU_PRICE_CACHE = []
+REKU_LAST_UPDATE = 0
 
-        return {
-            "last": float(d.get("last_price", 0)),
-            "high": float(d.get("high_price", 0)),
-            "low": float(d.get("low_price", 0)),
-            "vol_coin": float(d.get("volume_24h", 0)),
-            "vol_idr": float(d.get("quote_volume_24h", 0))
-        }
-    except:
+def get_reku_market(symbol):
+    global REKU_PRICE_CACHE, REKU_LAST_UPDATE
+    try:
+        # refresh every 30 sec
+        if time.time() - REKU_LAST_UPDATE > 30:
+            url = "https://api.reku.id/v2/price"
+            r = requests.get(url, timeout=10).json()
+            REKU_PRICE_CACHE = r.get("data", [])
+            REKU_LAST_UPDATE = time.time()
+
+        print("REKU CACHE:", [c.get("accountcode") for c in REKU_PRICE_CACHE])
+
+        for coin in REKU_PRICE_CACHE:
+            if coin.get("accountcode") == symbol:
+                return {
+                    "last": float(coin.get("price", 0)),
+                    "high": float(coin.get("high", coin.get("high_price", 0))),
+                    "low": float(coin.get("low", coin.get("low_price", 0))),
+                    "vol_coin": float(coin.get("volume", 0)),
+                    "vol_idr": float(coin.get("volume_idr", 0))
+                }
         return None
 
+    except Exception as e:
+        print("REKU PRICE ERROR:", e)
+        return None
+
+REKU_ORDERBOOK_CACHE = []
+REKU_ORDERBOOK_UPDATE = 0
+
 def get_reku_depth(symbol, current_price):
+    global REKU_ORDERBOOK_CACHE, REKU_ORDERBOOK_UPDATE
+
     try:
-        url = f"https://api.reku.id/v1/market/orderbook/{symbol}_IDR"
-        r = requests.get(url, timeout=10).json()
-        d = r.get("data", {})
+        # refresh every 30 sec
+        if time.time() - REKU_ORDERBOOK_UPDATE > 30:
+            url = "https://api.reku.id/v2/orderbook"
+            r = requests.get(url, timeout=10).json()
+            REKU_ORDERBOOK_CACHE = r.get("data", [])
+            REKU_ORDERBOOK_UPDATE = time.time()
 
-        bids = d.get("bids", [])
-        asks = d.get("asks", [])
+        for coin in REKU_ORDERBOOK_CACHE:
+            if coin.get("accountcode") == symbol:
+                bids = coin.get("bids", [])
+                asks = coin.get("asks", [])
+                break
+        else:
+            return None
 
+        # (keep your existing logic below unchanged)
+
+        # SAME LOGIC AS BEFORE
         buy_total_coin = buy_total_value = 0
         sell_total_coin = sell_total_value = 0
 
@@ -322,8 +354,13 @@ def get_reku_depth(symbol, current_price):
         buy_strong_price = buy_strong_coin = buy_strong_value = 0
         sell_strong_price = sell_strong_coin = sell_strong_value = 0
 
-        # BUY
-        for price, amount in bids:
+        for item in bids:
+            if isinstance(item, list):
+                price, amount = item
+            else:
+                price = item.get("price")
+                amount = item.get("amount")
+                
             price = float(price)
             amount = float(amount)
             value = price * amount
@@ -339,8 +376,13 @@ def get_reku_depth(symbol, current_price):
                 buy_strong_price = price
                 buy_strong_coin = amount
 
-        # SELL
-        for price, amount in asks:
+        for item in asks:
+            if isinstance(item, list):
+                price, amount = item
+            else:
+                price = item.get("price")
+                amount = item.get("amount")
+                
             price = float(price)
             amount = float(amount)
             value = price * amount
@@ -356,7 +398,6 @@ def get_reku_depth(symbol, current_price):
                 sell_strong_price = price
                 sell_strong_coin = amount
 
-        # SUPPORT / RESISTANCE (reuse your logic)
         sup = filter_levels(bids, current_price, False)
         res = filter_levels(asks, current_price, True)
 
@@ -365,24 +406,30 @@ def get_reku_depth(symbol, current_price):
             "buy_total_value": buy_total_value,
             "sell_total_coin": sell_total_coin,
             "sell_total_value": sell_total_value,
-
             "buy_bottom_price": buy_bottom_price,
             "sell_top_price": sell_top_price,
-
             "buy_strong_price": buy_strong_price,
             "buy_strong_coin": buy_strong_coin,
             "buy_strong_value": buy_strong_value,
-
             "sell_strong_price": sell_strong_price,
             "sell_strong_coin": sell_strong_coin,
             "sell_strong_value": sell_strong_value,
-
             "sup": sup,
             "res": res
         }
 
     except Exception as e:
-        print("Reku depth error:", e)
+        print("REKU ORDERBOOK ERROR:", e)
+        return None
+
+def get_reku_bidask(symbol):
+    try:
+        url = "https://api.reku.id/v2/bidaskpercoin"
+        r = requests.post(url, json={"accountcode": symbol}, timeout=10).json()
+
+        return r.get("data", {})
+    except Exception as e:
+        print("REKU BIDASK ERROR:", e)
         return None
 
 def detect_reku_whale(depth, current_price):
@@ -815,10 +862,11 @@ def send_report():
         symbol = REKU_SYMBOLS[coin]
 
         reku_market = get_reku_market(symbol)
+        print("CHECK REKU:", symbol, reku_market)
         if reku_market:
             reku_price = reku_market["last"]
 
-            prev_reku = last_reku_price[coin]
+            prev_reku = last_reku_price.get(coin)
             reku_change = ((reku_price - prev_reku) / prev_reku) * 100 if prev_reku else None
 
             line += f"\n\n🏦 <b>REKU</b>"
@@ -883,6 +931,7 @@ def send_report():
 
         message += line + "\n\n"
         last_report_price[pair] = price
+       
 
     send_telegram(message)
 
@@ -921,17 +970,21 @@ def loop():
                 if alert_r:
                     send_telegram(alert_r)
 
-       # REPORT SCHEDULE (FIXED)
+        # =========================
+        # REPORT SCHEDULE (FIXED)
+        # =========================
         if current_time.hour in [0, 8, 16] and current_time.minute < 5:
             if last_report_time != current_time.hour:
                 send_report()
                 last_report_time = current_time.hour
 
+        # =========================
+        # ON-CHAIN + REPORT
+        # =========================
         process_chain()
         chain_report()
 
         time.sleep(60)
-        
 # =========================
 # START
 # =========================
