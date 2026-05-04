@@ -861,25 +861,13 @@ def send_report():
             if whale:
                 line += f"\n🐋 {whale}"
 
+              # =========================
+        # 🔥 REKU SECTION
         # =========================
-        # 🔥 REKU SECTION (FIXED)
-        # =========================
-
-        # =========================
-        # REKU
-        # =========================
-        reku_data = get_reku_market(coin)
-        if not reku_data:
-            continue
-
-        reku_price = reku_data["last"]
-
         reku_market = get_reku_market(coin)
-        reku_depth = get_reku_depth(coin, reku_price)
-        print("CHECK REKU:", symbol, reku_market)
+
         if reku_market:
             reku_price = reku_market["last"]
-
 
             prev_reku = last_reku_price.get(coin)
             reku_change = ((reku_price - prev_reku) / prev_reku) * 100 if prev_reku else None
@@ -891,11 +879,10 @@ def send_report():
             line += f"\n\n📊 <b>24H Stats</b>"
             line += f"\n⬆️ High: Rp {format_rupiah(reku_market['high'])}"
             line += f"\n⬇️ Low : Rp {format_rupiah(reku_market['low'])}"
-            line += f"\n🪙 Volume Coin: {reku_market['vol_coin']:,.2f}".replace(",", ".")
             line += f"\n💰 Volume IDR: Rp {format_rupiah(reku_market['vol_idr'])}"
 
             # DEPTH
-            reku_depth = get_reku_depth(symbol, reku_price)
+            reku_depth = get_reku_depth(coin, reku_price)
 
             if reku_depth:
                 line += f"\n\n🟥 SELL"
@@ -907,12 +894,12 @@ def send_report():
                 line += f"\n   🔻 Bottom Price: Rp {format_rupiah(reku_depth['buy_bottom_price'])}"
                 line += f"\n   🪙 Total Coin: {reku_depth['buy_total_coin']:,.2f}".replace(",", ".")
                 line += f"\n   💰 Total Value: Rp {format_rupiah(reku_depth['buy_total_value'])}"
-                
+
                 line += f"\n\n🧱 Strongest SELL Wall:"
                 line += f"\n   Price: Rp {format_rupiah(reku_depth['sell_strong_price'])}"
                 line += f"\n   Coin: {reku_depth['sell_strong_coin']:,.2f}".replace(",", ".")
                 line += f"\n   Value: Rp {format_rupiah(reku_depth['sell_strong_value'])}"
-                
+
                 line += f"\n\n🧱 Strongest BUY Wall:"
                 line += f"\n   Price: Rp {format_rupiah(reku_depth['buy_strong_price'])}"
                 line += f"\n   Coin: {reku_depth['buy_strong_coin']:,.2f}".replace(",", ".")
@@ -931,7 +918,7 @@ def send_report():
                     line += f"\n   Price: Rp {format_rupiah(p)}"
                     line += f"\n   Coin: {v:,.2f}".replace(",", ".")
                     line += f"\n   Value: Rp {format_rupiah(val)}"
-                                                
+
                 whale_r = detect_reku_whale(reku_depth, reku_price)
                 if whale_r:
                     line += f"\n🐋 {whale_r}"
@@ -946,7 +933,6 @@ def send_report():
 
         message += line + "\n\n"
         last_report_price[pair] = price
-       
 
     send_telegram(message)
 
@@ -976,8 +962,6 @@ def loop():
             # REKU REALTIME ALERT
             # =========================
             reku_market = get_reku_market(coin)
-            reku_depth = get_reku_depth(coin, reku_price)
-
             if reku_market:
                 reku_price = reku_market["last"]
                 alert_r = check_reku_alert(coin, reku_price)
