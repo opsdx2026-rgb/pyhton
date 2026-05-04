@@ -324,27 +324,17 @@ REKU_ORDERBOOK_CACHE = []
 REKU_ORDERBOOK_UPDATE = 0
 
 def get_reku_depth(symbol, current_price):
-    global REKU_ORDERBOOK_CACHE, REKU_ORDERBOOK_UPDATE
-
     try:
-        # refresh every 30 sec
-        if time.time() - REKU_ORDERBOOK_UPDATE > 30:
-            url = "https://api.reku.id/v2/orderbook"
-            r = requests.get(url, timeout=10).json()
-            REKU_ORDERBOOK_CACHE = r.get("data", [])
-            REKU_ORDERBOOK_UPDATE = time.time()
+        pair = f"{symbol}_IDR"
+        url = f"https://api.reku.id/v2/orderbook?symbol={pair}"
+        r = requests.get(url, timeout=10).json()
 
-        for coin in REKU_ORDERBOOK_CACHE:
-            if coin.get("accountcode") == symbol:
-                bids = coin.get("bids", [])
-                asks = coin.get("asks", [])
-                break
-        else:
+        bids = r.get("b", [])   # ✅ BUY
+        asks = r.get("s", [])   # ✅ SELL
+
+        if not bids or not asks:
             return None
 
-        # (keep your existing logic below unchanged)
-
-        # SAME LOGIC AS BEFORE
         buy_total_coin = buy_total_value = 0
         sell_total_coin = sell_total_value = 0
 
@@ -354,18 +344,17 @@ def get_reku_depth(symbol, current_price):
         buy_strong_price = buy_strong_coin = buy_strong_value = 0
         sell_strong_price = sell_strong_coin = sell_strong_value = 0
 
+        # =========================
+        # BUY SIDE (bids)
+        # =========================
         for item in bids:
-            if isinstance(item, list):
-                price, amount = item
-            else:
-                price = item.get("price")
-                amount = item.get("amount")
-                
-            price = float(price)
-            amount = float(amount)
-            value = price * amount
+            total_idr, price, coin = item
 
-            buy_total_coin += amount
+            price = float(price)
+            coin = float(coin)
+            value = float(total_idr)   # ✅ already IDR
+
+            buy_total_coin += coin
             buy_total_value += value
 
             if price < buy_bottom_price:
@@ -374,20 +363,19 @@ def get_reku_depth(symbol, current_price):
             if value > buy_strong_value:
                 buy_strong_value = value
                 buy_strong_price = price
-                buy_strong_coin = amount
+                buy_strong_coin = coin
 
+        # =========================
+        # SELL SIDE (asks)
+        # =========================
         for item in asks:
-            if isinstance(item, list):
-                price, amount = item
-            else:
-                price = item.get("price")
-                amount = item.get("amount")
-                
-            price = float(price)
-            amount = float(amount)
-            value = price * amount
+            total_idr, price, coin = item
 
-            sell_total_coin += amount
+            price = float(price)
+            coin = float(coin)
+            value = float(total_idr)
+
+            sell_total_coin += coin
             sell_total_value += value
 
             if price > sell_top_price:
@@ -396,10 +384,16 @@ def get_reku_depth(symbol, current_price):
             if value > sell_strong_value:
                 sell_strong_value = value
                 sell_strong_price = price
-                sell_strong_coin = amount
+                sell_strong_coin = coin
 
-        sup = filter_levels(bids, current_price, False)
-        res = filter_levels(asks, current_price, True)
+        # =========================
+        # FILTER LEVELS (ADAPT FORMAT)
+        # =========================
+        bids_simple = [(float(x[1]), float(x[2])) for x in bids]
+        asks_simple = [(float(x[1]), float(x[2])) for x in asks]
+
+        sup = filter_levels(bids_simple, current_price, False)
+        res = filter_levels(asks_simple, current_price, True)
 
         return {
             "buy_total_coin": buy_total_coin,
