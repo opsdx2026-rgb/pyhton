@@ -24,10 +24,19 @@ COINS = {
 # =========================
 # REKU CONFIG
 # =========================
-REKU_SYMBOLS = {
-    "DRX": "DRX",
-    "CST": "CST",
-    "ANOA": "ANOA"
+REKU_CONFIG = {
+    "DRX": {
+        "symbol": "DRX_IDR",
+        "code": 220
+    },
+    "CST": {
+        "symbol": "CST_IDR",
+        "code": 366
+    },
+    "ANOA": {
+        "symbol": "ANOA_IDR",
+        "code": 365
+    }
 }
 # ✅ ADD THIS RIGHT HERE
 last_reku_price = {k: None for k in REKU_SYMBOLS}
@@ -293,27 +302,29 @@ Time: {tx["time"].strftime('%H:%M')}
 REKU_PRICE_CACHE = []
 REKU_LAST_UPDATE = 0
 
-def get_reku_market(symbol):
-    global REKU_PRICE_CACHE, REKU_LAST_UPDATE
+def get_reku_market(coin):
     try:
-        # refresh every 30 sec
-        if time.time() - REKU_LAST_UPDATE > 30:
-            url = "https://api.reku.id/v2/price"
-            r = requests.get(url, timeout=10).json()
-            REKU_PRICE_CACHE = r.get("data", [])
-            REKU_LAST_UPDATE = time.time()
+        code = REKU_CONFIG[coin]["code"]
 
-        print("REKU CACHE:", [c.get("accountcode") for c in REKU_PRICE_CACHE])
+        url = f"https://api.reku.id/v2/price/code?code={code}"
+        r = requests.get(url, timeout=10).json()
 
-        for coin in REKU_PRICE_CACHE:
-            if coin.get("accountcode") == symbol:
-                return {
-                    "last": float(coin.get("price", 0)),
-                    "high": float(coin.get("high", coin.get("high_price", 0))),
-                    "low": float(coin.get("low", coin.get("low_price", 0))),
-                    "vol_coin": float(coin.get("volume", 0)),
-                    "vol_idr": float(coin.get("volume_idr", 0))
-                }
+        if not isinstance(r, list) or not r:
+            return None
+
+        d = r[0]
+
+        return {
+            "last": float(d.get("c", 0)),
+            "high": float(d.get("h", 0)),
+            "low": float(d.get("l", 0)),
+            "open": float(d.get("o", 0)),
+            "change_pct": float(d.get("cp", 0)),
+            "vol_idr": float(d.get("v", 0))
+        }
+
+    except Exception as e:
+        print("REKU PRICE ERROR:", e)
         return None
 
     except Exception as e:
@@ -323,74 +334,74 @@ def get_reku_market(symbol):
 REKU_ORDERBOOK_CACHE = []
 REKU_ORDERBOOK_UPDATE = 0
 
-def get_reku_depth(symbol, current_price):
+def get_reku_depth(coin, current_price):
     try:
-        pair = f"{symbol}_IDR"
+        pair = REKU_CONFIG[coin]["symbol"]
+
         url = f"https://api.reku.id/v2/orderbook?symbol={pair}"
         r = requests.get(url, timeout=10).json()
 
-        bids = r.get("b", [])   # ✅ BUY
-        asks = r.get("s", [])   # ✅ SELL
+        data = r.get("data", r)
+        bids = data.get("b", [])
+        asks = data.get("s", [])
 
-        if not bids or not asks:
+        if not bids and not asks:
             return None
+
+        # (keep your logic exactly as fixed before)
 
         buy_total_coin = buy_total_value = 0
         sell_total_coin = sell_total_value = 0
 
         buy_bottom_price = float("inf")
-        sell_top_price = 0
+        sell_top_price = float("inf")
 
-        buy_strong_price = buy_strong_coin = buy_strong_value = 0
-        sell_strong_price = sell_strong_coin = sell_strong_value = 0
+        buy_strong_value = sell_strong_value = 0
+        buy_strong_price = sell_strong_price = 0
+        buy_strong_coin = sell_strong_coin = 0
 
-        # =========================
-        # BUY SIDE (bids)
-        # =========================
+        # BUY
         for item in bids:
-            total_idr, price, coin = item
-
-            price = float(price)
-            coin = float(coin)
-            value = float(total_idr)   # ✅ already IDR
+            try:
+                total_idr = float(item[0])
+                price = float(item[1])
+                coin = float(item[2])
+            except:
+                continue
 
             buy_total_coin += coin
-            buy_total_value += value
+            buy_total_value += total_idr
 
             if price < buy_bottom_price:
                 buy_bottom_price = price
 
-            if value > buy_strong_value:
-                buy_strong_value = value
+            if total_idr > buy_strong_value:
+                buy_strong_value = total_idr
                 buy_strong_price = price
                 buy_strong_coin = coin
 
-        # =========================
-        # SELL SIDE (asks)
-        # =========================
+        # SELL
         for item in asks:
-            total_idr, price, coin = item
-
-            price = float(price)
-            coin = float(coin)
-            value = float(total_idr)
+            try:
+                total_idr = float(item[0])
+                price = float(item[1])
+                coin = float(item[2])
+            except:
+                continue
 
             sell_total_coin += coin
-            sell_total_value += value
+            sell_total_value += total_idr
 
-            if price > sell_top_price:
+            if price < sell_top_price:
                 sell_top_price = price
 
-            if value > sell_strong_value:
-                sell_strong_value = value
+            if total_idr > sell_strong_value:
+                sell_strong_value = total_idr
                 sell_strong_price = price
                 sell_strong_coin = coin
 
-        # =========================
-        # FILTER LEVELS (ADAPT FORMAT)
-        # =========================
-        bids_simple = [(float(x[1]), float(x[2])) for x in bids]
-        asks_simple = [(float(x[1]), float(x[2])) for x in asks]
+        bids_simple = [(float(x[1]), float(x[2])) for x in bids if len(x) >= 3]
+        asks_simple = [(float(x[1]), float(x[2])) for x in asks if len(x) >= 3]
 
         sup = filter_levels(bids_simple, current_price, False)
         res = filter_levels(asks_simple, current_price, True)
@@ -853,9 +864,9 @@ def send_report():
         # =========================
         # 🔥 REKU SECTION (FIXED)
         # =========================
-        symbol = REKU_SYMBOLS[coin]
 
-        reku_market = get_reku_market(symbol)
+        reku_market = get_reku_market(coin)
+        reku_depth = get_reku_depth(coin, reku_price)
         print("CHECK REKU:", symbol, reku_market)
         if reku_market:
             reku_price = reku_market["last"]
