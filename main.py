@@ -965,8 +965,8 @@ def loop():
             # =========================
             # REKU REALTIME ALERT
             # =========================
-           reku_market = get_reku_market(coin)
-           reku_depth = get_reku_depth(coin, reku_price)
+            reku_market = get_reku_market(coin)
+            reku_depth = get_reku_depth(coin, reku_price)
 
             if reku_market:
                 reku_price = reku_market["last"]
