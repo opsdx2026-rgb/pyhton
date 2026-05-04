@@ -865,11 +865,21 @@ def send_report():
         # 🔥 REKU SECTION (FIXED)
         # =========================
 
+        # =========================
+        # REKU
+        # =========================
+        reku_data = get_reku_market(coin)
+        if not reku_data:
+            continue
+
+        reku_price = reku_data["last"]
+
         reku_market = get_reku_market(coin)
         reku_depth = get_reku_depth(coin, reku_price)
         print("CHECK REKU:", symbol, reku_market)
         if reku_market:
             reku_price = reku_market["last"]
+
 
             prev_reku = last_reku_price.get(coin)
             reku_change = ((reku_price - prev_reku) / prev_reku) * 100 if prev_reku else None
