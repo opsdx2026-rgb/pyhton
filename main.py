@@ -39,8 +39,8 @@ REKU_CONFIG = {
     }
 }
 # ✅ ADD THIS RIGHT HERE
-last_reku_price = {k: None for k in REKU_SYMBOLS}
-last_reku_alert = {k: None for k in REKU_SYMBOLS}
+last_reku_price = {k: None for k in REKU_CONFIG}
+last_reku_alert = {k: None for k in REKU_CONFIG}
         
 
 # =========================
@@ -965,8 +965,8 @@ def loop():
             # =========================
             # REKU REALTIME ALERT
             # =========================
-            symbol = REKU_SYMBOLS[coin]
-            reku_market = get_reku_market(symbol)
+           reku_market = get_reku_market(coin)
+           reku_depth = get_reku_depth(coin, reku_price)
 
             if reku_market:
                 reku_price = reku_market["last"]
