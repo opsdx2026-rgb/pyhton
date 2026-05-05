@@ -847,17 +847,21 @@ def send_report():
                 line += f"\n🐋 {whale}"
 
         # =========================
-        # 🔥 REKU
+        # 🔥 REKU SECTION (FIXED)
         # =========================
+        line += f"\n\n🏦 <b>REKU</b>"
+
         reku_market = get_reku_market(coin)
 
+        # =========================
+        # PRICE (OPTIONAL)
+        # =========================
         if reku_market:
             reku_price = reku_market["last"]
 
             prev = last_reku_price.get(coin)
             change = ((reku_price - prev) / prev) * 100 if prev else None
 
-            line += f"\n\n🏦 <b>REKU</b>"
             line += f"\n💰 Price: Rp {format_rupiah(reku_price)}"
             line += f"\n📊 Change: {f'{change:+.2f}%' if change else 'first data'}"
 
@@ -866,30 +870,36 @@ def send_report():
             line += f"\n⬇️ Low : Rp {format_rupiah(reku_market['low'])}"
             line += f"\n💰 Volume IDR: Rp {format_rupiah(reku_market['vol_idr'])}"
 
-            reku_depth = get_reku_depth(coin, reku_price)
-
-            if reku_depth:
-                line += f"\n\n🟥 SELL Top: Rp {format_rupiah(reku_depth['sell_top_price'])}"
-                line += f"\n🟩 BUY Bottom: Rp {format_rupiah(reku_depth['buy_bottom_price'])}"
-
-                line += f"\n\n🧱 SELL WALL: Rp {format_rupiah(reku_depth['sell_strong_price'])}"
-                line += f"\n💰 {format_rupiah(reku_depth['sell_strong_value'])}"
-
-                line += f"\n\n🧱 BUY WALL: Rp {format_rupiah(reku_depth['buy_strong_price'])}"
-                line += f"\n💰 {format_rupiah(reku_depth['buy_strong_value'])}"
-
             last_reku_price[coin] = reku_price
-
         else:
-            print("REKU MARKET FAILED:", coin)
+            print("REKU PRICE FAILED:", coin)
+            line += "\n⚠️ Price not available"
 
-        # ✅ ALWAYS APPEND
+        # =========================
+        # ORDERBOOK (ALWAYS RUN)
+        # =========================
+        reku_depth = get_reku_depth(coin, 0)
+
+        if reku_depth:
+            line += f"\n\n🟥 SELL Top: Rp {format_rupiah(reku_depth['sell_top_price'])}"
+            line += f"\n🟩 BUY Bottom: Rp {format_rupiah(reku_depth['buy_bottom_price'])}"
+
+            line += f"\n\n🧱 SELL WALL: Rp {format_rupiah(reku_depth['sell_strong_price'])}"
+            line += f"\n💰 {format_rupiah(reku_depth['sell_strong_value'])}"
+
+            line += f"\n\n🧱 BUY WALL: Rp {format_rupiah(reku_depth['buy_strong_price'])}"
+            line += f"\n💰 {format_rupiah(reku_depth['buy_strong_value'])}"
+        else:
+            print("REKU ORDERBOOK FAILED:", coin)
+            line += "\n⚠️ Orderbook not available"
+
+        # ✅ ALWAYS APPEND (INSIDE LOOP)
         message += line + "\n\n"
 
-        # ✅ update last report price (important for next change calc)
+        # ✅ update last report price (INSIDE LOOP)
         last_report_price[pair] = price
 
-    # ✅ SEND ONCE (CRITICAL)
+    # ✅ SEND ONCE (OUTSIDE LOOP)
     send_telegram(message)
 
 # =========================
