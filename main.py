@@ -788,14 +788,15 @@ def send_report():
         line = f"🔷 <b>{coin}</b>\n"
 
         # =========================
-        # 🏦 INDODAX (PRICE FIRST HERE)
+        # 🏦 INDODAX
         # =========================
         line += f"\n🏦 <b>INDODAX</b>"
         line += f"\n💰 Price: Rp {format_rupiah(price)}"
         line += f"\n📊 Change: {f'{change:+.2f}%' if change else 'first data'}"
+
         if most_price:
             line += f"\n🔥 Most Traded: Rp {format_rupiah(most_price)} (Rp {format_rupiah(most_volume)})"
-        
+
         line += f"\n\n📊 <b>24H Stats</b>"
         line += f"\n⬆️ High: Rp {format_rupiah(high_24h)}"
         line += f"\n⬇️ Low : Rp {format_rupiah(low_24h)}"
@@ -803,7 +804,7 @@ def send_report():
         line += f"\n💰 Volume IDR: Rp {format_rupiah(vol_idr)}"
 
         # =========================
-        # INDODAX DEPTH (FIXED)
+        # DEPTH
         # =========================
         if depth:
 
@@ -831,12 +832,12 @@ def send_report():
 
             # SUPPORT / RESISTANCE
             if depth["res"]:
-                p, v, val = depth["res"]
+                p, _, _ = depth["res"]
                 line += f"\n\n🚧 Resistance"
                 line += f"\n   Price: Rp {format_rupiah(p)}"
 
             if depth["sup"]:
-                p, v, val = depth["sup"]
+                p, _, _ = depth["sup"]
                 line += f"\n\n🛡️ Support"
                 line += f"\n   Price: Rp {format_rupiah(p)}"
 
@@ -847,9 +848,8 @@ def send_report():
             if whale:
                 line += f"\n🐋 {whale}"
 
-
         # =========================
-        # 🔥 REKU SECTION (FINAL FIX)
+        # 🔥 REKU
         # =========================
         reku_market = get_reku_market(coin)
 
@@ -868,7 +868,6 @@ def send_report():
             line += f"\n⬇️ Low : Rp {format_rupiah(reku_market['low'])}"
             line += f"\n💰 Volume IDR: Rp {format_rupiah(reku_market['vol_idr'])}"
 
-            # DEPTH
             reku_depth = get_reku_depth(coin, reku_price)
 
             if reku_depth:
@@ -885,6 +884,15 @@ def send_report():
 
         else:
             print("REKU MARKET FAILED:", coin)
+
+        # ✅ ALWAYS APPEND
+        message += line + "\n\n"
+
+        # ✅ update last report price (important for next change calc)
+        last_report_price[pair] = price
+
+    # ✅ SEND ONCE (CRITICAL)
+    send_telegram(message)
 
 # =========================
 # MAIN LOOP
