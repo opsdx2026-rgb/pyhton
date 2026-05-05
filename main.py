@@ -338,7 +338,9 @@ def get_reku_depth(coin, current_price):
         r = requests.get(url, timeout=10)
         raw = r.json()
 
-        # ✅ VALIDATION
+        # =========================
+        # VALIDATION
+        # =========================
         if not isinstance(raw, dict):
             print("INVALID FORMAT:", raw)
             return None
@@ -354,57 +356,78 @@ def get_reku_depth(coin, current_price):
             print("EMPTY ORDERBOOK:", coin)
             return None
 
-        buy_total = sell_total = 0
+        # =========================
+        # INIT
+        # =========================
+        buy_total_idr = buy_total_coin = 0
+        sell_total_idr = sell_total_coin = 0
 
-        best_bid = 0
-        best_ask = float("inf")
+        buy_strong_val = buy_strong_price = buy_strong_coin = 0
+        sell_strong_val = sell_strong_price = sell_strong_coin = 0
 
-        buy_strong_val = sell_strong_val = 0
-        buy_strong_price = sell_strong_price = 0
-
+        # =========================
         # BUY SIDE
+        # =========================
         for item in bids:
             try:
-                value = float(item[0])
+                value = float(item[0])   # IDR
                 price = float(item[1])
+                coin_amt = float(item[2])
             except:
                 continue
 
-            buy_total += value
-
-            if price > best_bid:
-                best_bid = price
+            buy_total_idr += value
+            buy_total_coin += coin_amt
 
             if value > buy_strong_val:
                 buy_strong_val = value
                 buy_strong_price = price
+                buy_strong_coin = coin_amt
 
+        # =========================
         # SELL SIDE
+        # =========================
         for item in asks:
             try:
                 value = float(item[0])
                 price = float(item[1])
+                coin_amt = float(item[2])
             except:
                 continue
 
-            sell_total += value
-
-            if price < best_ask:
-                best_ask = price
+            sell_total_idr += value
+            sell_total_coin += coin_amt
 
             if value > sell_strong_val:
                 sell_strong_val = value
                 sell_strong_price = price
+                sell_strong_coin = coin_amt
+
+        # =========================
+        # LAST LEVEL (IMPORTANT FIX)
+        # =========================
+        last_buy_price = float(bids[-1][1]) if bids else 0
+        last_sell_price = float(asks[-1][1]) if asks else 0
 
         return {
-            "buy_total_value": buy_total,
-            "sell_total_value": sell_total,
-            "buy_bottom_price": best_bid,   # best bid
-            "sell_top_price": best_ask,     # best ask
+            # TOTALS
+            "buy_total_value": buy_total_idr,
+            "buy_total_coin": buy_total_coin,
+            "sell_total_value": sell_total_idr,
+            "sell_total_coin": sell_total_coin,
+
+            # LAST LEVEL (your requirement)
+            "buy_bottom_price": last_buy_price,
+            "sell_top_price": last_sell_price,
+
+            # STRONG WALLS
             "buy_strong_price": buy_strong_price,
             "buy_strong_value": buy_strong_val,
+            "buy_strong_coin": buy_strong_coin,
+
             "sell_strong_price": sell_strong_price,
-            "sell_strong_value": sell_strong_val
+            "sell_strong_value": sell_strong_val,
+            "sell_strong_coin": sell_strong_coin
         }
 
     except Exception as e:
@@ -938,7 +961,7 @@ def loop():
         # =========================
         # REPORT SCHEDULE (FIXED)
         # =========================
-        if current_time.hour in [0, 8, 16] and current_time.minute < 5:
+        if current_time.hour in [0, 6, 16] and current_time.minute < 5:
             if last_report_time != current_time.hour:
                 send_report()
                 last_report_time = current_time.hour
