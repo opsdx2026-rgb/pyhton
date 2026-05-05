@@ -904,14 +904,25 @@ def send_report():
         reku_depth = get_reku_depth(coin, 0)
 
         if reku_depth:
-            line += f"\n\n🟥 SELL Top: Rp {format_rupiah(reku_depth['sell_top_price'])}"
-            line += f"\n🟩 BUY Bottom: Rp {format_rupiah(reku_depth['buy_bottom_price'])}"
-
-            line += f"\n\n🧱 SELL WALL: Rp {format_rupiah(reku_depth['sell_strong_price'])}"
-            line += f"\n💰 {format_rupiah(reku_depth['sell_strong_value'])}"
-
-            line += f"\n\n🧱 BUY WALL: Rp {format_rupiah(reku_depth['buy_strong_price'])}"
-            line += f"\n💰 {format_rupiah(reku_depth['buy_strong_value'])}"
+            line += f"\n\n🟥 SELL"
+            line += f"\n   🔺 Highest Offer: Rp {format_rupiah(reku_depth['sell_top_price'])}"
+            line += f"\n   🪙 Total Offer Coin: {reku_depth['sell_total_coin']:,.2f}".replace(",", ".")
+            line += f"\n   💰 Total Offer Value: Rp {format_rupiah(reku_depth['sell_total_value'])}"
+            
+            line += f"\n   🧱 Strongest Wall:"
+            line += f"\n      Price: Rp {format_rupiah(reku_depth['sell_strong_price'])}"
+            line += f"\n      Coin: {reku_depth['sell_strong_coin']:,.2f}".replace(",", ".")
+            line += f"\n      Value: Rp {format_rupiah(reku_depth['sell_strong_value'])}"
+            
+            line += f"\n\n🟩 BUY"
+            line += f"\n   🔻 Lowest Bid: Rp {format_rupiah(reku_depth['buy_bottom_price'])}"
+            line += f"\n   🪙 Total Bid Coin: {reku_depth['buy_total_coin']:,.2f}".replace(",", ".")
+            line += f"\n   💰 Total Bid Value: Rp {format_rupiah(reku_depth['buy_total_value'])}"
+            
+            line += f"\n   🧱 Strongest Wall:"
+            line += f"\n      Price: Rp {format_rupiah(reku_depth['buy_strong_price'])}"
+            line += f"\n      Coin: {reku_depth['buy_strong_coin']:,.2f}".replace(",", ".")
+            line += f"\n      Value: Rp {format_rupiah(reku_depth['buy_strong_value'])}"
         else:
             print("REKU ORDERBOOK FAILED:", coin)
             line += "\n⚠️ Orderbook not available"
