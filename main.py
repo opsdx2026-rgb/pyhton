@@ -330,7 +330,6 @@ def get_reku_market(coin):
 
 REKU_ORDERBOOK_CACHE = []
 REKU_ORDERBOOK_UPDATE = 0
-
 def get_reku_depth(coin, current_price):
     try:
         pair = REKU_CONFIG[coin]["symbol"]
@@ -339,25 +338,26 @@ def get_reku_depth(coin, current_price):
         r = requests.get(url, timeout=10)
         raw = r.json()
 
-        print("REKU RAW:", coin, raw)  # 🔥 DEBUG
+        # ✅ VALIDATION
+        if not isinstance(raw, dict):
+            print("INVALID FORMAT:", raw)
+            return None
 
-        # handle both formats
-        data = raw.get("data") if isinstance(raw, dict) else None
+        bids = raw.get("b")
+        asks = raw.get("s")
 
-        if data:
-            bids = data.get("b", [])
-            asks = data.get("s", [])
-        else:
-            bids = raw.get("b", [])
-            asks = raw.get("s", [])
+        if bids is None or asks is None:
+            print("MISSING BID/ASK:", raw)
+            return None
 
         if not bids and not asks:
             print("EMPTY ORDERBOOK:", coin)
             return None
 
         buy_total = sell_total = 0
-        buy_bottom = float("inf")
-        sell_top = float("inf")
+
+        best_bid = 0
+        best_ask = float("inf")
 
         buy_strong_val = sell_strong_val = 0
         buy_strong_price = sell_strong_price = 0
@@ -367,14 +367,13 @@ def get_reku_depth(coin, current_price):
             try:
                 value = float(item[0])
                 price = float(item[1])
-                coin_amt = float(item[2])
             except:
                 continue
 
             buy_total += value
 
-            if price < buy_bottom:
-                buy_bottom = price
+            if price > best_bid:
+                best_bid = price
 
             if value > buy_strong_val:
                 buy_strong_val = value
@@ -385,14 +384,13 @@ def get_reku_depth(coin, current_price):
             try:
                 value = float(item[0])
                 price = float(item[1])
-                coin_amt = float(item[2])
             except:
                 continue
 
             sell_total += value
 
-            if price < sell_top:
-                sell_top = price
+            if price < best_ask:
+                best_ask = price
 
             if value > sell_strong_val:
                 sell_strong_val = value
@@ -401,8 +399,8 @@ def get_reku_depth(coin, current_price):
         return {
             "buy_total_value": buy_total,
             "sell_total_value": sell_total,
-            "buy_bottom_price": buy_bottom,
-            "sell_top_price": sell_top,
+            "buy_bottom_price": best_bid,   # best bid
+            "sell_top_price": best_ask,     # best ask
             "buy_strong_price": buy_strong_price,
             "buy_strong_value": buy_strong_val,
             "sell_strong_price": sell_strong_price,
