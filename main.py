@@ -530,8 +530,7 @@ def check_reku_alert(coin, price):
     return None
 
 TOKO_PRODUCTS_URL = (
-    "https://www.tokocrypto.com/bapi/asset/v2/public/"
-    "asset-service/product/get-products?includeEtf=true"
+    "https://www.tokocrypto.com/bapi/asset/v2/public/%22%22asset-service/product/get-products?includeEtf=true"
 )
 
 TOKO_FALLBACK_URL = (
