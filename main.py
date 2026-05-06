@@ -626,25 +626,28 @@ def update_tokocrypto_market():
             "Accept": "application/json"
         }
 
-        # Last price
+        # Price
         price_url = "https://cloudme-toko.2meta.app/api/v1/ticker/price?symbol=DRXIDR"
-        price_res = requests.get(price_url, headers=headers, timeout=10).json()
+        r_price = requests.get(price_url, headers=headers, timeout=10)
+        print("TOKO PRICE STATUS:", r_price.status_code, r_price.text)
 
-        price = float(price_res.get("price", 0))
+        price_data = r_price.json()
+        price = float(price_data.get("price", 0))
+
         if price > 0:
             TOKO_DATA["DRX"]["price"] = price
 
-        # High / low from current 1d candle
+        # High / Low / volume from 1d candle
         kline_url = "https://cloudme-toko.2meta.app/api/v1/klines?symbol=DRXIDR&interval=1d&limit=1"
-        kline_res = requests.get(kline_url, headers=headers, timeout=10).json()
+        r_kline = requests.get(kline_url, headers=headers, timeout=10)
+        print("TOKO KLINE STATUS:", r_kline.status_code, r_kline.text)
 
-        k = kline_res.get("value", [])
+        kline_data = r_kline.json()
+        k = kline_data.get("value", [])
 
         if isinstance(k, list) and len(k) >= 8:
             TOKO_DATA["DRX"]["high"] = float(k[2])
             TOKO_DATA["DRX"]["low"] = float(k[3])
-
-            # Optional: daily candle volume, NOT exact website rolling 24h volume
             TOKO_DATA["DRX"]["vol_coin"] = float(k[5])
             TOKO_DATA["DRX"]["vol_idr"] = float(k[7])
 
@@ -1185,17 +1188,17 @@ def send_report():
             update_tokocrypto_depth()
 
             toko = TOKO_DATA["DRX"]
-
-
+        
             line += f"\n\n🏦 <b>TOKOCRYPTO</b>"
-
+        
             line += f"\n💰 Price: Rp {format_rupiah(toko['price'])}"
-
+        
             line += f"\n\n📊 <b>24H Stats</b>"
             line += f"\n⬆️ High: Rp {format_rupiah(toko['high'])}"
             line += f"\n⬇️ Low : Rp {format_rupiah(toko['low'])}"
             line += f"\n🪙 Volume Coin: {toko['vol_coin']:,.2f}".replace(",", ".")
             line += f"\n💰 Volume IDR: Rp {format_rupiah(toko['vol_idr'])}"
+
 
             # SELL
             line += f"\n\n🟥 SELL"
