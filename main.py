@@ -630,6 +630,7 @@ def start_tokocrypto_ws():
             data = json.loads(message)
 
             print("TOKO WS RAW:", data)
+            print("TOKO WS TYPE:", type(data))
 
             # =========================
             # WRAPPED STREAM
@@ -642,9 +643,14 @@ def start_tokocrypto_ws():
             # =========================
             # VALIDATION
             # =========================
-            if "c" not in d:
+            if not isinstance(d, dict):
                 return
 
+            # miniTicker validation
+            if "c" not in d:
+                print("NO PRICE FIELD:", d)
+                return
+           
             TOKO_DATA["DRX"]["price"] = float(d.get("c", 0))
             TOKO_DATA["DRX"]["high"] = float(d.get("h", 0))
             TOKO_DATA["DRX"]["low"] = float(d.get("l", 0))
