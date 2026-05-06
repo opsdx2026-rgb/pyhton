@@ -1263,8 +1263,7 @@ def loop():
 # =========================
 # START
 # =========================
-
-   if __name__ == "__main__":
+if __name__ == "__main__":
 
     print("🚀 Multi-Engine Bot Started")
 
