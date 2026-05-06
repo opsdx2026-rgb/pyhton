@@ -626,35 +626,35 @@ def start_tokocrypto_ws():
 
     def on_message(ws, message):
 
-    try:
-        data = json.loads(message)
+        try:
+            data = json.loads(message)
 
-        print("TOKO WS RAW:", data)
+            print("TOKO WS RAW:", data)
 
-        # =========================
-        # WRAPPED STREAM
-        # =========================
-        if "data" in data:
-            d = data["data"]
-        else:
-            d = data
+            # =========================
+            # WRAPPED STREAM
+            # =========================
+            if "data" in data:
+                d = data["data"]
+            else:
+                d = data
 
-        # =========================
-        # VALIDATION
-        # =========================
-        if "c" not in d:
-            return
+            # =========================
+            # VALIDATION
+            # =========================
+            if "c" not in d:
+                return
 
-        TOKO_DATA["DRX"]["price"] = float(d.get("c", 0))
-        TOKO_DATA["DRX"]["high"] = float(d.get("h", 0))
-        TOKO_DATA["DRX"]["low"] = float(d.get("l", 0))
-        TOKO_DATA["DRX"]["vol_coin"] = float(d.get("v", 0))
-        TOKO_DATA["DRX"]["vol_idr"] = float(d.get("q", 0))
+            TOKO_DATA["DRX"]["price"] = float(d.get("c", 0))
+            TOKO_DATA["DRX"]["high"] = float(d.get("h", 0))
+            TOKO_DATA["DRX"]["low"] = float(d.get("l", 0))
+            TOKO_DATA["DRX"]["vol_coin"] = float(d.get("v", 0))
+            TOKO_DATA["DRX"]["vol_idr"] = float(d.get("q", 0))
 
-        print("TOKO UPDATED:", TOKO_DATA["DRX"])
+            print("TOKO UPDATED:", TOKO_DATA["DRX"])
 
-    except Exception as e:
-        print("TOKO WS MESSAGE ERROR:", e)
+        except Exception as e:
+            print("TOKO WS MESSAGE ERROR:", e)
 
     def on_open(ws):
 
