@@ -334,28 +334,41 @@ REKU_PRICE_CACHE = []
 REKU_LAST_UPDATE = 0
 
 def get_reku_market(coin):
+
     try:
-        code = REKU_CONFIG[coin]["code"]
-        url = f"https://api.reku.id/v2/price/code?code={code}"
 
-        r = requests.get(url, timeout=10).json()
+        url = "https://api.reku.id/v3/market?mode=trade&enable=0&delisted=0"
 
-        if not isinstance(r, list) or not r:
-            print("REKU PRICE EMPTY:", coin)
+        r = requests.get(url, timeout=10)
+
+        data = r.json()
+
+        if not isinstance(data, list):
+            print("REKU INVALID RESPONSE:", data)
             return None
 
-        d = r[0]
+        # find by cd
+        target = None
+
+        for item in data:
+
+            if item.get("cd") == coin:
+                target = item
+                break
+
+        if not target:
+            print("REKU COIN NOT FOUND:", coin)
+            return None
 
         return {
-            "last": float(d.get("c", 0)),
-            "high": float(d.get("h", 0)),
-            "low": float(d.get("l", 0)),
-            "open": float(d.get("o", 0)),
-            "change_pct": float(d.get("cp", 0)),
-            "vol_idr": float(d.get("v", 0))
+            "last": float(target.get("c", 0)),
+            "high": float(target.get("h", 0)),
+            "low": float(target.get("l", 0)),
+            "vol_idr": float(target.get("v", 0))
         }
 
     except Exception as e:
+
         print("REKU PRICE ERROR:", coin, e)
         return None
 
