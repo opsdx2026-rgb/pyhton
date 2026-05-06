@@ -529,6 +529,91 @@ def check_reku_alert(coin, price):
 
     return None
 
+TOKO_PRODUCTS_URL = (
+    "https://www.tokocrypto.com/bapi/asset/v2/public/"
+    "asset-service/product/get-products?includeEtf=true"
+)
+
+TOKO_FALLBACK_URL = (
+    "https://cloudme-toko.2meta.app/api/v1/ticker/24hr?symbol=DRXIDR"
+)
+
+
+class TokocryptoMarketError(RuntimeError):
+    pass
+
+
+def fetch_tokocrypto_market(symbol="DRX_IDR"):
+
+    headers = {
+        "accept": "application/json",
+        "user-agent": "Mozilla/5.0",
+        "referer": f"https://www.tokocrypto.com/id/trade/{symbol}",
+    }
+
+    try:
+
+        # =========================
+        # FRONTEND API
+        # =========================
+        response = requests.get(
+            TOKO_PRODUCTS_URL,
+            headers=headers,
+            timeout=20
+        )
+
+        print("TOKO STATUS:", response.status_code)
+
+        content_type = response.headers.get("content-type", "")
+
+        if response.status_code == 200 and "json" in content_type.lower():
+
+            payload = response.json()
+
+            products = payload.get("data", {}).get("data", [])
+
+            row = next(
+                (item for item in products if item.get("s") == symbol),
+                None
+            )
+
+            if row:
+
+                return {
+                    "symbol": row["s"],
+                    "last_price": float(row["c"]),
+                    "high_24h": float(row["h"]),
+                    "low_24h": float(row["l"]),
+                    "volume_24h_drx": float(row["v"]),
+                    "volume_24h_idr": float(row["qv"]),
+                }
+
+        # =========================
+        # FALLBACK API
+        # =========================
+        print("TOKO FRONTEND BLOCKED -> USING FALLBACK")
+
+        r = requests.get(
+            TOKO_FALLBACK_URL,
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=20
+        )
+
+        data = r.json()
+
+        return {
+            "symbol": symbol,
+            "last_price": float(data.get("c", 0)),
+            "high_24h": float(data.get("h", 0)),
+            "low_24h": float(data.get("l", 0)),
+            "volume_24h_drx": float(data.get("v", 0)),
+            "volume_24h_idr": float(data.get("q", 0)),
+        }
+
+    except Exception as e:
+
+        raise TokocryptoMarketError(str(e))
+
 # =========================
 # TOKOCRYPTO DEPTH
 # =========================
@@ -637,49 +722,13 @@ def update_tokocrypto_market():
 
     try:
 
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-            "Accept": "application/json, text/plain, */*",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Origin": "https://www.tokocrypto.com",
-            "Referer": "https://www.tokocrypto.com/id/trade/DRX_IDR"
-        }
+        data = fetch_tokocrypto_market("DRX_IDR")
 
-        url = "https://www.tokocrypto.com/bapi/asset/v2/public/asset-service/product/get-products?includeEtf=true"
-
-        r = requests.get(
-            url,
-            headers=headers,
-            timeout=15
-        )
-
-        print("TOKO STATUS:", r.status_code)
-        print("TOKO TEXT:", r.text[:500])
-
-        raw = r.json()
-
-        # FIXED
-        products = raw["data"]["data"]
-
-        target = None
-
-        for item in products:
-
-            if item.get("b") == "DRX":
-                target = item
-                break
-
-        print("TOKO TARGET:", target)
-
-        if not target:
-            print("DRX_IDR NOT FOUND")
-            return
-
-        TOKO_DATA["DRX"]["price"] = float(target["c"])
-        TOKO_DATA["DRX"]["high"] = float(target["h"])
-        TOKO_DATA["DRX"]["low"] = float(target["l"])
-        TOKO_DATA["DRX"]["vol_coin"] = float(target["v"])
-        TOKO_DATA["DRX"]["vol_idr"] = float(target["qv"])
+        TOKO_DATA["DRX"]["price"] = data["last_price"]
+        TOKO_DATA["DRX"]["high"] = data["high_24h"]
+        TOKO_DATA["DRX"]["low"] = data["low_24h"]
+        TOKO_DATA["DRX"]["vol_coin"] = data["volume_24h_drx"]
+        TOKO_DATA["DRX"]["vol_idr"] = data["volume_24h_idr"]
 
         print("TOKO MARKET UPDATED:", TOKO_DATA["DRX"])
 
