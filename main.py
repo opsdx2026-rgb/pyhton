@@ -632,7 +632,7 @@ def start_tokocrypto_ws():
             if "data" not in data:
                 return
 
-            d = data["data"]
+            d = data.get("data", data)
 
             TOKO_DATA["DRX"]["price"] = float(d.get("c", 0))
             TOKO_DATA["DRX"]["high"] = float(d.get("h", 0))
@@ -648,7 +648,7 @@ def start_tokocrypto_ws():
         sub = {
             "method": "SUBSCRIBE",
             "params": [
-                "drxidr@ticker"
+                "drxidr@miniTicker"
             ],
             "id": 1
         }
