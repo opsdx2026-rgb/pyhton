@@ -619,6 +619,40 @@ def update_tokocrypto_depth():
 
     except Exception as e:
         print("TOKOCRYPTO DEPTH ERROR:", e)
+def update_tokocrypto_market():
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "application/json"
+        }
+
+        # Last price
+        price_url = "https://cloudme-toko.2meta.app/api/v1/ticker/price?symbol=DRXIDR"
+        price_res = requests.get(price_url, headers=headers, timeout=10).json()
+
+        price = float(price_res.get("price", 0))
+        if price > 0:
+            TOKO_DATA["DRX"]["price"] = price
+
+        # High / low from current 1d candle
+        kline_url = "https://cloudme-toko.2meta.app/api/v1/klines?symbol=DRXIDR&interval=1d&limit=1"
+        kline_res = requests.get(kline_url, headers=headers, timeout=10).json()
+
+        k = kline_res.get("value", [])
+
+        if isinstance(k, list) and len(k) >= 8:
+            TOKO_DATA["DRX"]["high"] = float(k[2])
+            TOKO_DATA["DRX"]["low"] = float(k[3])
+
+            # Optional: daily candle volume, NOT exact website rolling 24h volume
+            TOKO_DATA["DRX"]["vol_coin"] = float(k[5])
+            TOKO_DATA["DRX"]["vol_idr"] = float(k[7])
+
+        print("TOKO MARKET UPDATED:", TOKO_DATA["DRX"])
+
+    except Exception as e:
+        print("TOKOCRYPTO MARKET ERROR:", e)
+
 
 def start_tokocrypto_ws():
 
@@ -628,6 +662,9 @@ def start_tokocrypto_ws():
 
         try:
             data = json.loads(message)
+            if "id" in data and "result" in data:
+                print("TOKO SUBSCRIBED OK:", data)
+                return
 
             print("TOKO WS RAW:", data)
             print("TOKO WS TYPE:", type(data))
@@ -1144,9 +1181,11 @@ def send_report():
         # =========================
         if coin == "DRX":
 
+            update_tokocrypto_market()
             update_tokocrypto_depth()
 
             toko = TOKO_DATA["DRX"]
+
 
             line += f"\n\n🏦 <b>TOKOCRYPTO</b>"
 
