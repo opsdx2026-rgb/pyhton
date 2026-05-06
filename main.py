@@ -663,51 +663,38 @@ def start_tokocrypto_ws():
 
     def on_message(ws, message):
 
-        try:
-            data = json.loads(message)
-            if "id" in data and "result" in data:
-                print("TOKO SUBSCRIBED OK:", data)
-                return
+    try:
+        data = json.loads(message)
 
-            print("TOKO WS RAW:", data)
-            print("TOKO WS TYPE:", type(data))
+        print("TOKO WS RAW:", data)
 
-            # =========================
-            # WRAPPED STREAM
-            # =========================
-            if "data" in data:
-                d = data["data"]
-            else:
-                d = data
+        # subscription response
+        if "result" in data:
+            return
 
-            # =========================
-            # VALIDATION
-            # =========================
-            if not isinstance(d, dict):
-                return
+        # must contain kline
+        if "k" not in data:
+            return
 
-            # miniTicker validation
-            if "c" not in d:
-                print("NO PRICE FIELD:", d)
-                return
-           
-            TOKO_DATA["DRX"]["price"] = float(d.get("c", 0))
-            TOKO_DATA["DRX"]["high"] = float(d.get("h", 0))
-            TOKO_DATA["DRX"]["low"] = float(d.get("l", 0))
-            TOKO_DATA["DRX"]["vol_coin"] = float(d.get("v", 0))
-            TOKO_DATA["DRX"]["vol_idr"] = float(d.get("q", 0))
+        k = data["k"]
 
-            print("TOKO UPDATED:", TOKO_DATA["DRX"])
+        TOKO_DATA["DRX"]["price"] = float(k.get("c", 0))
+        TOKO_DATA["DRX"]["high"] = float(k.get("h", 0))
+        TOKO_DATA["DRX"]["low"] = float(k.get("l", 0))
+        TOKO_DATA["DRX"]["vol_coin"] = float(k.get("v", 0))
+        TOKO_DATA["DRX"]["vol_idr"] = float(k.get("q", 0))
 
-        except Exception as e:
-            print("TOKO WS MESSAGE ERROR:", e)
+        print("TOKO UPDATED:", TOKO_DATA["DRX"])
+
+    except Exception as e:
+        print("TOKO WS MESSAGE ERROR:", e)
 
     def on_open(ws):
 
         sub = {
             "method": "SUBSCRIBE",
             "params": [
-                "drxidr@miniTicker"
+                "drxidr@kline_1d"
             ],
             "id": 1
         }
