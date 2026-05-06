@@ -599,6 +599,21 @@ def fetch_tokocrypto_market(symbol="DRX_IDR"):
             timeout=20
         )
 
+        print("TOKO FALLBACK STATUS:", r.status_code)
+        print("TOKO FALLBACK TEXT:", r.text[:300])
+
+        content_type = r.headers.get("content-type", "")
+
+        if r.status_code != 200:
+            raise TokocryptoMarketError(
+                f"Fallback HTTP {r.status_code}"
+            )
+
+        if "json" not in content_type.lower():
+            raise TokocryptoMarketError(
+                f"Fallback non-JSON response: {content_type}"
+            )
+
         data = r.json()
 
         return {
@@ -609,10 +624,6 @@ def fetch_tokocrypto_market(symbol="DRX_IDR"):
             "volume_24h_drx": float(data.get("v", 0)),
             "volume_24h_idr": float(data.get("q", 0)),
         }
-
-    except Exception as e:
-
-        raise TokocryptoMarketError(str(e))
 
 # =========================
 # TOKOCRYPTO DEPTH
