@@ -683,40 +683,7 @@ def update_tokocrypto_market():
 
         print("TOKOCRYPTO MARKET ERROR:", e)
 
-    def on_open(ws):
-
-        sub = {
-            "method": "SUBSCRIBE",
-            "params": [
-                "drxidr@kline_1d"
-            ],
-            "id": 1
-        }
-
-        ws.send(json.dumps(sub))
-
-        print("TOKOCRYPTO WS CONNECTED")
-
-    while True:
-
-        try:
-
-            ws = websocket.WebSocketApp(
-                WS_URL,
-                on_open=on_open,
-                on_message=on_message
-            )
-
-            ws.run_forever(
-                ping_interval=30,
-                ping_timeout=10
-            )
-
-        except Exception as e:
-            print("TOKOCRYPTO WS ERROR:", e)
-
-        time.sleep(5)
-
+   
 # =========================
 # GET PRICE
 # =========================
