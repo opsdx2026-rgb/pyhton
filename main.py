@@ -646,22 +646,18 @@ def update_tokocrypto_market():
 
         r = requests.get(url, headers=headers, timeout=10)
 
-        print("TOKO PRODUCT STATUS:", r.status_code)
-
         raw = r.json()
 
-        print("TOKO RAW:", raw)
+        products = raw.get("data", [])
 
-        # IMPORTANT FIX
-        products = raw.get("data", {}).get("data", [])
+        if isinstance(products, dict):
+            products = products.get("data", [])
 
         target = None
 
         for item in products:
 
-            symbol = item.get("s", "")
-
-            if symbol == "DRX_IDR":
+            if item.get("s") == "DRX_IDR":
                 target = item
                 break
 
@@ -669,13 +665,15 @@ def update_tokocrypto_market():
             print("DRX_IDR NOT FOUND")
             return
 
-        print("TOKO DRX DATA:", target)
+        print("TOKO TARGET:", target)
 
         TOKO_DATA["DRX"]["price"] = float(target.get("c", 0))
         TOKO_DATA["DRX"]["high"] = float(target.get("h", 0))
         TOKO_DATA["DRX"]["low"] = float(target.get("l", 0))
         TOKO_DATA["DRX"]["vol_coin"] = float(target.get("v", 0))
-        TOKO_DATA["DRX"]["vol_idr"] = float(target.get("q", 0))
+
+        # IMPORTANT FIX
+        TOKO_DATA["DRX"]["vol_idr"] = float(target.get("qv", 0))
 
         print("TOKO MARKET UPDATED:", TOKO_DATA["DRX"])
 
