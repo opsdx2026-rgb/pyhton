@@ -3,6 +3,9 @@ import requests
 from datetime import datetime, timedelta
 import pytz
 import time
+import websocket
+import threading
+import json
 
 # =========================
 # CONFIG
@@ -41,6 +44,34 @@ REKU_CONFIG = {
 # ✅ ADD THIS RIGHT HERE
 last_reku_price = {k: None for k in REKU_CONFIG}
 last_reku_alert = {k: None for k in REKU_CONFIG}
+
+# =========================
+# TOKOCRYPTO CONFIG
+# =========================
+
+TOKO_DATA = {
+    "DRX": {
+        "price": 0,
+        "high": 0,
+        "low": 0,
+        "vol_coin": 0,
+        "vol_idr": 0,
+
+        "buy_total_coin": 0,
+        "buy_total_value": 0,
+        "buy_bottom_price": 0,
+        "buy_strong_price": 0,
+        "buy_strong_coin": 0,
+        "buy_strong_value": 0,
+
+        "sell_total_coin": 0,
+        "sell_total_value": 0,
+        "sell_top_price": 0,
+        "sell_strong_price": 0,
+        "sell_strong_coin": 0,
+        "sell_strong_value": 0
+    }
+}
         
 
 # =========================
@@ -486,6 +517,167 @@ def check_reku_alert(coin, price):
     return None
 
 # =========================
+# TOKOCRYPTO DEPTH
+# =========================
+
+def update_tokocrypto_depth():
+    try:
+        url = "https://cloudme-toko.2meta.app/api/v1/depth?symbol=DRXIDR&limit=1000"
+
+        headers = {
+            "User-Agent": "Mozilla/5.0"
+        }
+
+        r = requests.get(url, headers=headers, timeout=10)
+        data = r.json()
+
+        raw = data.get("data", data)
+        bids = raw.get("bids", [])
+        asks = raw.get("asks", [])
+
+        # =========================
+        # BUY
+        # =========================
+        buy_total_coin = 0
+        buy_total_value = 0
+
+        buy_bottom_price = float("inf")
+
+        buy_strong_price = 0
+        buy_strong_coin = 0
+        buy_strong_value = 0
+
+        for item in bids:
+
+            try:
+                price = float(item[0])
+                coin = float(item[1])
+            except:
+                continue
+
+            value = price * coin
+
+            buy_total_coin += coin
+            buy_total_value += value
+
+            if price < buy_bottom_price:
+                buy_bottom_price = price
+
+            if value > buy_strong_value:
+                buy_strong_value = value
+                buy_strong_price = price
+                buy_strong_coin = coin
+
+        # =========================
+        # SELL
+        # =========================
+        sell_total_coin = 0
+        sell_total_value = 0
+
+        sell_top_price = 0
+
+        sell_strong_price = 0
+        sell_strong_coin = 0
+        sell_strong_value = 0
+
+        for item in asks:
+
+            try:
+                price = float(item[0])
+                coin = float(item[1])
+            except:
+                continue
+
+            value = price * coin
+
+            sell_total_coin += coin
+            sell_total_value += value
+
+            if price > sell_top_price:
+                sell_top_price = price
+
+            if value > sell_strong_value:
+                sell_strong_value = value
+                sell_strong_price = price
+                sell_strong_coin = coin
+
+        TOKO_DATA["DRX"].update({
+            "buy_total_coin": buy_total_coin,
+            "buy_total_value": buy_total_value,
+            "buy_bottom_price": buy_bottom_price,
+            "buy_strong_price": buy_strong_price,
+            "buy_strong_coin": buy_strong_coin,
+            "buy_strong_value": buy_strong_value,
+
+            "sell_total_coin": sell_total_coin,
+            "sell_total_value": sell_total_value,
+            "sell_top_price": sell_top_price,
+            "sell_strong_price": sell_strong_price,
+            "sell_strong_coin": sell_strong_coin,
+            "sell_strong_value": sell_strong_value
+        })
+
+    except Exception as e:
+        print("TOKOCRYPTO DEPTH ERROR:", e)
+
+def start_tokocrypto_ws():
+
+    WS_URL = "wss://stream-toko.2meta.app/ws"
+
+    def on_message(ws, message):
+
+        try:
+            data = json.loads(message)
+
+            if "data" not in data:
+                return
+
+            d = data["data"]
+
+            TOKO_DATA["DRX"]["price"] = float(d.get("c", 0))
+            TOKO_DATA["DRX"]["high"] = float(d.get("h", 0))
+            TOKO_DATA["DRX"]["low"] = float(d.get("l", 0))
+            TOKO_DATA["DRX"]["vol_coin"] = float(d.get("v", 0))
+            TOKO_DATA["DRX"]["vol_idr"] = float(d.get("q", 0))
+
+        except Exception as e:
+            print("TOKO WS MESSAGE ERROR:", e)
+
+    def on_open(ws):
+
+        sub = {
+            "method": "SUBSCRIBE",
+            "params": [
+                "drxidr@ticker"
+            ],
+            "id": 1
+        }
+
+        ws.send(json.dumps(sub))
+
+        print("TOKOCRYPTO WS CONNECTED")
+
+    while True:
+
+        try:
+
+                        ws = websocket.WebSocketApp(
+                WS_URL,
+                on_open=on_open,
+                on_message=on_message
+            )
+
+            ws.run_forever(
+                ping_interval=30,
+                ping_timeout=10
+            )
+
+        except Exception as e:
+            print("TOKOCRYPTO WS ERROR:", e)
+
+        time.sleep(5)
+
+# =========================
 # GET PRICE
 # =========================
 def get_price_data(pair):
@@ -927,13 +1119,55 @@ def send_report():
             print("REKU ORDERBOOK FAILED:", coin)
             line += "\n⚠️ Orderbook not available"
 
-        # ✅ ALWAYS APPEND (INSIDE LOOP)
+   
+        # =========================
+        # TOKOCRYPTO
+        # =========================
+        if coin == "DRX":
+
+            update_tokocrypto_depth()
+
+            toko = TOKO_DATA["DRX"]
+
+            line += f"\n\n🏦 <b>TOKOCRYPTO</b>"
+
+            line += f"\n💰 Price: Rp {format_rupiah(toko['price'])}"
+
+            line += f"\n\n📊 <b>24H Stats</b>"
+            line += f"\n⬆️ High: Rp {format_rupiah(toko['high'])}"
+            line += f"\n⬇️ Low : Rp {format_rupiah(toko['low'])}"
+            line += f"\n🪙 Volume Coin: {toko['vol_coin']:,.2f}".replace(",", ".")
+            line += f"\n💰 Volume IDR: Rp {format_rupiah(toko['vol_idr'])}"
+
+            # SELL
+            line += f"\n\n🟥 SELL"
+            line += f"\n   🔺 Highest Offer: Rp {format_rupiah(toko['sell_top_price'])}"
+            line += f"\n   🪙 Total Offer Coin: {toko['sell_total_coin']:,.2f}".replace(",", ".")
+            line += f"\n   💰 Total Offer Value: Rp {format_rupiah(toko['sell_total_value'])}"
+
+            line += f"\n   🧱 Strongest Wall:"
+            line += f"\n      Price: Rp {format_rupiah(toko['sell_strong_price'])}"
+            line += f"\n      Coin: {toko['sell_strong_coin']:,.2f}".replace(",", ".")
+            line += f"\n      Value: Rp {format_rupiah(toko['sell_strong_value'])}"
+
+            # BUY
+            line += f"\n\n🟩 BUY"
+            line += f"\n   🔻 Lowest Bid: Rp {format_rupiah(toko['buy_bottom_price'])}"
+            line += f"\n   🪙 Total Bid Coin: {toko['buy_total_coin']:,.2f}".replace(",", ".")
+            line += f"\n   💰 Total Bid Value: Rp {format_rupiah(toko['buy_total_value'])}"
+
+            line += f"\n   🧱 Strongest Wall:"
+            line += f"\n      Price: Rp {format_rupiah(toko['buy_strong_price'])}"
+            line += f"\n      Coin: {toko['buy_strong_coin']:,.2f}".replace(",", ".")
+            line += f"\n      Value: Rp {format_rupiah(toko['buy_strong_value'])}"
+
+        # ✅ ALWAYS APPEND
         message += line + "\n\n"
 
-        # ✅ update last report price (INSIDE LOOP)
+        # ✅ update last report price
         last_report_price[pair] = price
 
-    # ✅ SEND ONCE (OUTSIDE LOOP)
+    # ✅ SEND TELEGRAM ONCE
     send_telegram(message)
 
 # =========================
@@ -988,6 +1222,16 @@ def loop():
 # START
 # =========================
 if __name__ == "__main__":
+
     print("🚀 Multi-Engine Bot Started")
-    send_report () 
+
+    threading.Thread(
+        target=start_tokocrypto_ws,
+        daemon=True
+    ).start()
+
+    time.sleep(3)
+
+    send_report()
+
     loop()
