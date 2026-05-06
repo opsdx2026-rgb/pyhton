@@ -638,20 +638,27 @@ def update_tokocrypto_market():
             TOKO_DATA["DRX"]["price"] = price
 
         # High / Low / volume from 1d candle
+       
         kline_url = "https://cloudme-toko.2meta.app/api/v1/klines?symbol=DRXIDR&interval=1d&limit=1"
+
         r_kline = requests.get(kline_url, headers=headers, timeout=10)
+        
         print("TOKO KLINE STATUS:", r_kline.status_code, r_kline.text)
+        
+        candles = r_kline.json()
+        
+        if isinstance(candles, list) and len(candles) > 0:
 
-        kline_data = r_kline.json()
-        k = kline_data.get("value", [])
-
-        if isinstance(k, list) and len(k) >= 8:
+            k = candles[0]
+        
             TOKO_DATA["DRX"]["high"] = float(k[2])
             TOKO_DATA["DRX"]["low"] = float(k[3])
             TOKO_DATA["DRX"]["vol_coin"] = float(k[5])
             TOKO_DATA["DRX"]["vol_idr"] = float(k[7])
 
-        print("TOKO MARKET UPDATED:", TOKO_DATA["DRX"])
+            print("TOKO KLINE PARSED:", k)
+
+print("TOKO MARKET UPDATED:", TOKO_DATA["DRX"])
 
     except Exception as e:
         print("TOKOCRYPTO MARKET ERROR:", e)
