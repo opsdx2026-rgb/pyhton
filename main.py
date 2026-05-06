@@ -626,29 +626,42 @@ def start_tokocrypto_ws():
 
     def on_message(ws, message):
 
-        try:
-            data = json.loads(message)
+    try:
+        data = json.loads(message)
 
-            if "data" not in data:
-                return
+        print("TOKO WS RAW:", data)
 
-            d = data.get("data", data)
+        # =========================
+        # WRAPPED STREAM
+        # =========================
+        if "data" in data:
+            d = data["data"]
+        else:
+            d = data
 
-            TOKO_DATA["DRX"]["price"] = float(d.get("c", 0))
-            TOKO_DATA["DRX"]["high"] = float(d.get("h", 0))
-            TOKO_DATA["DRX"]["low"] = float(d.get("l", 0))
-            TOKO_DATA["DRX"]["vol_coin"] = float(d.get("v", 0))
-            TOKO_DATA["DRX"]["vol_idr"] = float(d.get("q", 0))
+        # =========================
+        # VALIDATION
+        # =========================
+        if "c" not in d:
+            return
 
-        except Exception as e:
-            print("TOKO WS MESSAGE ERROR:", e)
+        TOKO_DATA["DRX"]["price"] = float(d.get("c", 0))
+        TOKO_DATA["DRX"]["high"] = float(d.get("h", 0))
+        TOKO_DATA["DRX"]["low"] = float(d.get("l", 0))
+        TOKO_DATA["DRX"]["vol_coin"] = float(d.get("v", 0))
+        TOKO_DATA["DRX"]["vol_idr"] = float(d.get("q", 0))
+
+        print("TOKO UPDATED:", TOKO_DATA["DRX"])
+
+    except Exception as e:
+        print("TOKO WS MESSAGE ERROR:", e)
 
     def on_open(ws):
 
         sub = {
             "method": "SUBSCRIBE",
             "params": [
-                "drxidr@miniTicker"
+                "DRXIDR@miniTicker"
             ],
             "id": 1
         }
