@@ -637,26 +637,26 @@ def update_tokocrypto_market():
 
     try:
 
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept": "application/json, text/plain, */*",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Origin": "https://www.tokocrypto.com",
-        "Referer": "https://www.tokocrypto.com/id/trade/DRX_IDR"
-}
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Origin": "https://www.tokocrypto.com",
+            "Referer": "https://www.tokocrypto.com/id/trade/DRX_IDR"
+        }
 
-    url = "https://www.tokocrypto.com/bapi/asset/v2/public/asset-service/product/get-products?includeEtf=true"
+        url = "https://www.tokocrypto.com/bapi/asset/v2/public/asset-service/product/get-products?includeEtf=true"
 
-    r = requests.get(
-    url,
-    headers=headers,
-    timeout=15
-)
+        r = requests.get(
+            url,
+            headers=headers,
+            timeout=15
+        )
 
-    print("TOKO STATUS:", r.status_code)
-    print("TOKO TEXT:", r.text[:500])
+        print("TOKO STATUS:", r.status_code)
+        print("TOKO TEXT:", r.text[:500])
 
-    raw = r.json()
+        raw = r.json()
 
         # FIXED
         products = raw["data"]["data"]
