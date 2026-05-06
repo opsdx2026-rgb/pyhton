@@ -661,7 +661,7 @@ def start_tokocrypto_ws():
 
         try:
 
-                        ws = websocket.WebSocketApp(
+            ws = websocket.WebSocketApp(
                 WS_URL,
                 on_open=on_open,
                 on_message=on_message
