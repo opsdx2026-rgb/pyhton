@@ -588,7 +588,7 @@ def fetch_tokocrypto_market(symbol="DRX_IDR"):
                     "volume_24h_idr": float(row["qv"]),
                 }
 
-        # =========================
+               # =========================
         # FALLBACK API
         # =========================
         print("TOKO FRONTEND BLOCKED -> USING FALLBACK")
@@ -624,6 +624,11 @@ def fetch_tokocrypto_market(symbol="DRX_IDR"):
             "volume_24h_drx": float(data.get("v", 0)),
             "volume_24h_idr": float(data.get("q", 0)),
         }
+
+    except Exception as e:
+
+        raise TokocryptoMarketError(str(e))
+
 
 # =========================
 # TOKOCRYPTO DEPTH
