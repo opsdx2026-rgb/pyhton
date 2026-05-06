@@ -667,7 +667,7 @@ def start_tokocrypto_ws():
         sub = {
             "method": "SUBSCRIBE",
             "params": [
-                "DRXIDR@miniTicker"
+                "drxidr@miniTicker"
             ],
             "id": 1
         }
