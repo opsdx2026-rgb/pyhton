@@ -642,43 +642,47 @@ def update_tokocrypto_market():
             "Accept": "application/json"
         }
 
-        # =========================
-        # PRICE
-        # =========================
-        price_url = "https://cloudme-toko.2meta.app/api/v1/ticker/price?symbol=DRXIDR"
+        url = "https://www.tokocrypto.com/bapi/asset/v2/public/asset-service/product/get-products?includeEtf=true"
 
-        r_price = requests.get(price_url, headers=headers, timeout=10)
+        r = requests.get(url, headers=headers, timeout=10)
 
-        print("TOKO PRICE STATUS:", r_price.status_code, r_price.text)
+        print("TOKO PRODUCT STATUS:", r.status_code)
 
-        price_data = r_price.json()
-
-        price = float(price_data.get("price", 0))
-
-        if price > 0:
-            TOKO_DATA["DRX"]["price"] = price
+        raw = r.json()
 
         # =========================
-        # KLINE
+        # FIND DRX_IDR
         # =========================
-        kline_url = "https://cloudme-toko.2meta.app/api/v1/klines?symbol=DRXIDR&interval=1d&limit=1"
+        products = raw.get("data", [])
 
-        r_kline = requests.get(kline_url, headers=headers, timeout=10)
+        target = None
 
-        print("TOKO KLINE STATUS:", r_kline.status_code, r_kline.text)
+        for item in products:
 
-        candles = r_kline.json()
+            symbol = item.get("s", "")
 
-        if isinstance(candles, list) and len(candles) > 0:
+            if symbol == "DRX_IDR":
+                target = item
+                break
 
-            k = candles[0]
+        if not target:
+            print("DRX_IDR NOT FOUND")
+            return
 
-            TOKO_DATA["DRX"]["high"] = float(k[2])
-            TOKO_DATA["DRX"]["low"] = float(k[3])
-            TOKO_DATA["DRX"]["vol_coin"] = float(k[5])
-            TOKO_DATA["DRX"]["vol_idr"] = float(k[7])
+        print("TOKO DRX DATA:", target)
 
-            print("TOKO KLINE PARSED:", k)
+        # =========================
+        # UPDATE MARKET
+        # =========================
+        TOKO_DATA["DRX"]["price"] = float(target.get("c", 0))
+        TOKO_DATA["DRX"]["high"] = float(target.get("h", 0))
+        TOKO_DATA["DRX"]["low"] = float(target.get("l", 0))
+
+        # base volume = DRX
+        TOKO_DATA["DRX"]["vol_coin"] = float(target.get("v", 0))
+
+        # quote volume = IDR
+        TOKO_DATA["DRX"]["vol_idr"] = float(target.get("qv", 0))
 
         print("TOKO MARKET UPDATED:", TOKO_DATA["DRX"])
 
