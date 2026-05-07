@@ -46,6 +46,17 @@ last_reku_price = {k: None for k in REKU_CONFIG}
 last_reku_alert = {k: None for k in REKU_CONFIG}
 
 # =========================
+# TOKOCRYPTO ALERT MEMORY
+# =========================
+last_toko_price = {
+    "DRX": None
+}
+
+last_toko_alert = {
+    "DRX": None
+}
+
+# =========================
 # TOKOCRYPTO CONFIG
 # =========================
 
@@ -529,6 +540,59 @@ def check_reku_alert(coin, price):
 
     return None
 
+# =========================
+# TOKOCRYPTO ALERT
+# =========================
+def check_toko_alert(coin, price):
+
+    prev = last_toko_alert[coin]
+
+    if prev is None:
+        last_toko_alert[coin] = price
+        return None
+
+    change = ((price - prev) / prev) * 100
+
+    # BIG ALERT
+    if change >= 10:
+
+        last_toko_alert[coin] = price
+
+        return (
+            f"🚨🚨 <b>{coin} TOKOCRYPTO +{change:.2f}%</b>\n"
+            f"💰 Rp {format_rupiah(price)}"
+        )
+
+    elif change <= -10:
+
+        last_toko_alert[coin] = price
+
+        return (
+            f"🚨🚨 <b>{coin} TOKOCRYPTO {change:.2f}%</b>\n"
+            f"💰 Rp {format_rupiah(price)}"
+        )
+
+    # NORMAL ALERT
+    elif change >= 5:
+
+        last_toko_alert[coin] = price
+
+        return (
+            f"🚀 <b>{coin} TOKOCRYPTO +{change:.2f}%</b>\n"
+            f"💰 Rp {format_rupiah(price)}"
+        )
+
+    elif change <= -5:
+
+        last_toko_alert[coin] = price
+
+        return (
+            f"⚠️ <b>{coin} TOKOCRYPTO {change:.2f}%</b>\n"
+            f"💰 Rp {format_rupiah(price)}"
+        )
+
+    return None
+
 TOKO_PRODUCTS_URL = (
     "https://www.tokocrypto.com/bapi/asset/v2/public/%22%22asset-service/product/get-products?includeEtf=true"
 )
@@ -542,91 +606,106 @@ class TokocryptoMarketError(RuntimeError):
     pass
 
 
-def fetch_tokocrypto_market(symbol="DRX_IDR"):
+def fetch_tokocrypto_market(symbol="DRXIDR"):
 
     headers = {
-        "accept": "application/json",
-        "user-agent": "Mozilla/5.0",
-        "referer": f"https://www.tokocrypto.com/id/trade/{symbol}",
+        "Accept": "application/json",
+        "User-Agent": "Mozilla/5.0",
+        "Origin": "https://www.tokocrypto.com",
+        "Referer": "https://www.tokocrypto.com/id/trade/DRX_IDR",
     }
+
+    # =========================
+    # 1. MAIN 24H ENDPOINT
+    # =========================
+    try:
+
+        r = requests.get(
+            "https://cloudme-toko.2meta.app/api/v1/ticker/24hr",
+            params={"symbol": symbol},
+            headers=headers,
+            timeout=15,
+        )
+
+        if r.status_code == 200:
+
+            data = r.json()
+
+            return {
+                "symbol": symbol,
+                "last_price": float(data.get("lastPrice", data.get("c", 0))),
+                "high_24h": float(data.get("highPrice", data.get("h", 0))),
+                "low_24h": float(data.get("lowPrice", data.get("l", 0))),
+                "volume_24h_coin": float(data.get("volume", data.get("v", 0))),
+                "volume_24h_idr": float(data.get("quoteVolume", data.get("q", 0))),
+            }
+
+    except Exception as e:
+        print("TOKO 24H API ERROR:", e)
+
+    # =========================
+    # 2. FALLBACK PRICE
+    # =========================
+    price = 0
 
     try:
 
-        # =========================
-        # FRONTEND API
-        # =========================
-        response = requests.get(
-            TOKO_PRODUCTS_URL,
-            headers=headers,
-            timeout=20
-        )
-
-        print("TOKO STATUS:", response.status_code)
-
-        content_type = response.headers.get("content-type", "")
-
-        if response.status_code == 200 and "json" in content_type.lower():
-
-            payload = response.json()
-
-            products = payload.get("data", {}).get("data", [])
-
-            row = next(
-                (item for item in products if item.get("s") == symbol),
-                None
-            )
-
-            if row:
-
-                return {
-                    "symbol": row["s"],
-                    "last_price": float(row["c"]),
-                    "high_24h": float(row["h"]),
-                    "low_24h": float(row["l"]),
-                    "volume_24h_drx": float(row["v"]),
-                    "volume_24h_idr": float(row["qv"]),
-                }
-
-               # =========================
-        # FALLBACK API
-        # =========================
-        print("TOKO FRONTEND BLOCKED -> USING FALLBACK")
-
         r = requests.get(
-            TOKO_FALLBACK_URL,
-            headers={"User-Agent": "Mozilla/5.0"},
-            timeout=20
+            "https://cloudme-toko.2meta.app/api/v1/ticker/price",
+            params={"symbol": symbol},
+            headers=headers,
+            timeout=15,
         )
 
-        print("TOKO FALLBACK STATUS:", r.status_code)
-        print("TOKO FALLBACK TEXT:", r.text[:300])
-
-        content_type = r.headers.get("content-type", "")
-
-        if r.status_code != 200:
-            raise TokocryptoMarketError(
-                f"Fallback HTTP {r.status_code}"
-            )
-
-        if "json" not in content_type.lower():
-            raise TokocryptoMarketError(
-                f"Fallback non-JSON response: {content_type}"
-            )
-
-        data = r.json()
-
-        return {
-            "symbol": symbol,
-            "last_price": float(data.get("c", 0)),
-            "high_24h": float(data.get("h", 0)),
-            "low_24h": float(data.get("l", 0)),
-            "volume_24h_drx": float(data.get("v", 0)),
-            "volume_24h_idr": float(data.get("q", 0)),
-        }
+        if r.status_code == 200:
+            price = float(r.json().get("price", 0))
 
     except Exception as e:
+        print("TOKO PRICE API ERROR:", e)
 
-        raise TokocryptoMarketError(str(e))
+    # =========================
+    # 3. FALLBACK KLINE
+    # =========================
+    high = low = vol_coin = vol_idr = 0
+
+    try:
+
+        r = requests.get(
+            "https://cloudme-toko.2meta.app/api/v1/klines",
+            params={
+                "symbol": symbol,
+                "interval": "1d",
+                "limit": 1
+            },
+            headers=headers,
+            timeout=15,
+        )
+
+        if r.status_code == 200:
+
+            candle = r.json()
+
+            if isinstance(candle, dict):
+                candle = candle.get("data", [])
+
+            row = candle[-1]
+
+            high = float(row[2])
+            low = float(row[3])
+            vol_coin = float(row[5])
+            vol_idr = float(row[7]) if len(row) > 7 else 0
+
+    except Exception as e:
+        print("TOKO KLINE API ERROR:", e)
+
+    return {
+        "symbol": symbol,
+        "last_price": price,
+        "high_24h": high,
+        "low_24h": low,
+        "volume_24h_coin": vol_coin,
+        "volume_24h_idr": vol_idr,
+    }
 
 
 # =========================
@@ -737,12 +816,13 @@ def update_tokocrypto_market():
 
     try:
 
-        data = fetch_tokocrypto_market("DRX_IDR")
+        data = fetch_tokocrypto_market("DRXIDR")
 
         TOKO_DATA["DRX"]["price"] = data["last_price"]
         TOKO_DATA["DRX"]["high"] = data["high_24h"]
         TOKO_DATA["DRX"]["low"] = data["low_24h"]
-        TOKO_DATA["DRX"]["vol_coin"] = data["volume_24h_drx"]
+
+        TOKO_DATA["DRX"]["vol_coin"] = data["volume_24h_coin"]
         TOKO_DATA["DRX"]["vol_idr"] = data["volume_24h_idr"]
 
         print("TOKO MARKET UPDATED:", TOKO_DATA["DRX"])
@@ -773,9 +853,10 @@ def get_price(pair):
     data = get_price_data(pair)
     return data["last"] if data else None
 # =========================
-# 🚨 PRICE ALERT
+# 🚨 INDODAX PRICE ALERT
 # =========================
 def check_price_alert(pair, coin, price):
+
     prev = last_alert_price[pair]
 
     if prev is None:
@@ -784,23 +865,47 @@ def check_price_alert(pair, coin, price):
 
     change = ((price - prev) / prev) * 100
 
-    # 🚨🚨 BIG ALERT ±10%
+    # =========================
+    # BIG ALERT ±10%
+    # =========================
     if change >= 10:
+
         last_alert_price[pair] = price
-        return f"🚨🚨 <b>{coin} BIG BREAKOUT +{change:.2f}%</b>\n💰 Rp {format_rupiah(price)}"
+
+        return (
+            f"🚨🚨 <b>{coin} INDODAX +{change:.2f}%</b>\n"
+            f"💰 Rp {format_rupiah(price)}"
+        )
 
     elif change <= -10:
-        last_alert_price[pair] = price
-        return f"🚨🚨 <b>{coin} BIG DROP {change:.2f}%</b>\n💰 Rp {format_rupiah(price)}"
 
-    # 🚨 NORMAL ALERT ±5%
-    elif change >= 5:
         last_alert_price[pair] = price
-        return f"🚀 <b>{coin}</b> BREAKOUT +{change:.2f}%\n💰 Rp {format_rupiah(price)}"
+
+        return (
+            f"🚨🚨 <b>{coin} INDODAX {change:.2f}%</b>\n"
+            f"💰 Rp {format_rupiah(price)}"
+        )
+
+    # =========================
+    # NORMAL ALERT ±5%
+    # =========================
+    elif change >= 5:
+
+        last_alert_price[pair] = price
+
+        return (
+            f"🚀 <b>{coin} INDODAX +{change:.2f}%</b>\n"
+            f"💰 Rp {format_rupiah(price)}"
+        )
 
     elif change <= -5:
+
         last_alert_price[pair] = price
-        return f"⚠️ <b>{coin}</b> DROP {change:.2f}%\n💰 Rp {format_rupiah(price)}"
+
+        return (
+            f"⚠️ <b>{coin} INDODAX {change:.2f}%</b>\n"
+            f"💰 Rp {format_rupiah(price)}"
+        )
 
     return None
 
@@ -1049,8 +1154,6 @@ def send_report():
     wib = pytz.timezone("Asia/Jakarta")
     timestamp = datetime.now(wib).strftime("%Y-%m-%d %H:%M:%S")
 
-    message = f"📊 <b>Multi-Exchange Report</b>\n⏰ {timestamp}\n\n"
-
     for coin, pair in COINS.items():
 
         # =========================
@@ -1239,13 +1342,16 @@ def send_report():
             line += f"\n      Value: Rp {format_rupiah(toko['buy_strong_value'])}"
 
         # ✅ ALWAYS APPEND
-        message += line + "\n\n"
+        final_message = (
+            f"📊 <b>{coin} Multi-Exchange Report</b>\n"
+            f"⏰ {timestamp}\n\n"
+            f"{line}"
+        )
+
+        send_telegram(final_message)
 
         # ✅ update last report price
         last_report_price[pair] = price
-
-    # ✅ SEND TELEGRAM ONCE
-    send_telegram(message)
 
 # =========================
 # MAIN LOOP
@@ -1279,6 +1385,31 @@ def loop():
 
                 if alert_r:
                     send_telegram(alert_r)
+
+             # =========================
+            # TOKOCRYPTO REALTIME ALERT
+            # =========================
+            if coin == "DRX":
+
+                try:
+
+                    update_tokocrypto_market()
+
+                    toko_price = TOKO_DATA["DRX"]["price"]
+
+                    if toko_price:
+
+                        alert_t = check_toko_alert(
+                            "DRX",
+                            toko_price
+                        )
+
+                        if alert_t:
+                            send_telegram(alert_t)
+
+                except Exception as e:
+
+                    print("TOKO ALERT ERROR:", e)
 
         # =========================
         # REPORT SCHEDULE (FIXED)
