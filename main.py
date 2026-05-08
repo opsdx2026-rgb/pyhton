@@ -83,6 +83,40 @@ TOKO_DATA = {
         "sell_strong_value": 0
     }
 }
+# =========================
+# GUDANGKRIPTO CONFIG
+# =========================
+GK_WS_URL = "wss://be.gudangkripto.id/ws"
+
+GK_DATA = {
+    "DRX": {
+        "price": 0,
+        "high": 0,
+        "low": 0,
+        "vol_coin": 0,
+        "vol_idr": 0,
+
+        "buy_total_coin": 0,
+        "buy_total_value": 0,
+        "buy_bottom_price": 0,
+        "buy_strong_price": 0,
+        "buy_strong_coin": 0,
+        "buy_strong_value": 0,
+
+        "sell_total_coin": 0,
+        "sell_total_value": 0,
+        "sell_top_price": 0,
+        "sell_strong_price": 0,
+        "sell_strong_coin": 0,
+        "sell_strong_value": 0
+    }
+}
+
+last_gk_alert = {
+    "DRX": None
+}
+
+last_gk_whale = None
         
 
 # =========================
@@ -592,6 +626,60 @@ def check_toko_alert(coin, price):
         )
 
     return None
+# =========================
+# GUDANGKRIPTO ALERT
+# =========================
+def check_gk_alert(coin, price):
+
+    prev = last_gk_alert[coin]
+
+    if prev is None:
+        last_gk_alert[coin] = price
+        return None
+
+    change = ((price - prev) / prev) * 100
+
+    if change >= 10:
+
+        last_gk_alert[coin] = price
+
+        return (
+            f"🚨🚨 <b>{coin} GUDANGKRIPTO +{change:.2f}%</b>\n"
+            f"💰 Rp {format_rupiah(price)}"
+        )
+
+    elif change <= -10:
+
+        last_gk_alert[coin] = price
+
+        return (
+            f"🚨🚨 <b>{coin} GUDANGKRIPTO {change:.2f}%</b>\n"
+            f"💰 Rp {format_rupiah(price)}"
+        )
+
+    elif change >= 5:
+
+        last_gk_alert[coin] = price
+
+        return (
+            f"🚀 <b>{coin} GUDANGKRIPTO +{change:.2f}%</b>\n"
+            f"💰 Rp {format_rupiah(price)}"
+        )
+
+    elif change <= -5:
+
+        last_gk_alert[coin] = price
+
+        return (
+            f"⚠️ <b>{coin} GUDANGKRIPTO {change:.2f}%</b>\n"
+            f"💰 Rp {format_rupiah(price)}"
+        )
+
+    return None
+
+# =========================
+# TOKOCRYPTO PRICE
+# =========================
 
 TOKO_PRODUCTS_URL = (
     "https://www.tokocrypto.com/bapi/asset/v2/public/%22%22asset-service/product/get-products?includeEtf=true"
@@ -1341,6 +1429,44 @@ def send_report():
             line += f"\n      Coin: {toko['buy_strong_coin']:,.2f}".replace(",", ".")
             line += f"\n      Value: Rp {format_rupiah(toko['buy_strong_value'])}"
 
+
+        # =========================
+        # GUDANGKRIPTO
+        # =========================
+        if coin == "DRX":
+
+            gk = GK_DATA["DRX"]
+
+            line += f"\n\n🏦 <b>GUDANGKRIPTO</b>"
+
+            line += f"\n💰 Price: Rp {format_rupiah(gk['price'])}"
+
+            line += f"\n\n📊 <b>24H Stats</b>"
+            line += f"\n⬆️ High: Rp {format_rupiah(gk['high'])}"
+            line += f"\n⬇️ Low : Rp {format_rupiah(gk['low'])}"
+            line += f"\n🪙 Volume Coin: {gk['vol_coin']:,.2f}".replace(",", ".")
+            line += f"\n💰 Volume IDR: Rp {format_rupiah(gk['vol_idr'])}"
+
+            line += f"\n\n🟥 SELL"
+            line += f"\n   🔺 Highest Offer: Rp {format_rupiah(gk['sell_top_price'])}"
+            line += f"\n   🪙 Total Offer Coin: {gk['sell_total_coin']:,.2f}".replace(",", ".")
+            line += f"\n   💰 Total Offer Value: Rp {format_rupiah(gk['sell_total_value'])}"
+
+            line += f"\n   🧱 Strongest Wall:"
+            line += f"\n      Price: Rp {format_rupiah(gk['sell_strong_price'])}"
+            line += f"\n      Coin: {gk['sell_strong_coin']:,.2f}".replace(",", ".")
+            line += f"\n      Value: Rp {format_rupiah(gk['sell_strong_value'])}"
+
+            line += f"\n\n🟩 BUY"
+            line += f"\n   🔻 Lowest Bid: Rp {format_rupiah(gk['buy_bottom_price'])}"
+            line += f"\n   🪙 Total Bid Coin: {gk['buy_total_coin']:,.2f}".replace(",", ".")
+            line += f"\n   💰 Total Bid Value: Rp {format_rupiah(gk['buy_total_value'])}"
+
+            line += f"\n   🧱 Strongest Wall:"
+            line += f"\n      Price: Rp {format_rupiah(gk['buy_strong_price'])}"
+            line += f"\n      Coin: {gk['buy_strong_coin']:,.2f}".replace(",", ".")
+            line += f"\n      Value: Rp {format_rupiah(gk['buy_strong_value'])}"
+
         # ✅ ALWAYS APPEND
         final_message = (
             f"📊 <b>{coin} Multi-Exchange Report</b>\n"
@@ -1352,6 +1478,264 @@ def send_report():
 
         # ✅ update last report price
         last_report_price[pair] = price
+# =========================
+# GUDANGKRIPTO WS
+# =========================
+def gudangkripto_ws():
+
+    global last_gk_whale
+
+    while True:
+
+        try:
+
+            ws = websocket.create_connection(GK_WS_URL)
+
+            print("✅ GUDANGKRIPTO CONNECTED")
+
+            subscribe_message = {
+                "action": "subscribe",
+                "channels": [
+                    "ticker:DRX_IDR",
+                    "orderbook:DRX_IDR",
+                    "trades:DRX_IDR"
+                ]
+            }
+
+            ws.send(json.dumps(subscribe_message))
+
+            print("✅ GUDANGKRIPTO SUBSCRIBED")
+
+            while True:
+
+                raw = ws.recv()
+
+                print("GK RAW:", raw)
+
+                data = json.loads(raw)
+
+                msg_type = str(data.get("type", "")).lower()
+
+                # =========================
+                # TICKER
+                # =========================
+                if msg_type == "ticker":
+
+                    d = data.get("data", {})
+
+                    GK_DATA["DRX"]["price"] = float(
+                        d.get("last_price", 0)
+                    )
+
+                    GK_DATA["DRX"]["high"] = float(
+                        d.get("high", 0)
+                    )
+
+                    GK_DATA["DRX"]["low"] = float(
+                        d.get("low", 0)
+                    )
+
+                    GK_DATA["DRX"]["vol_coin"] = float(
+                        d.get("volume_coin")
+                        or d.get("volume")
+                        or 0
+                    )
+
+                    GK_DATA["DRX"]["vol_idr"] = float(
+                        d.get("volume_fiat")
+                        or d.get("quote_volume")
+                        or 0
+                    )
+
+                    print("✅ GK TICKER UPDATED")
+
+                # =========================
+                # ORDERBOOK
+                # =========================
+                elif msg_type == "orderbook":
+
+                    d = data.get("data", {})
+
+                    bids = d.get("bids", [])
+                    asks = d.get("asks", [])
+
+                    if not bids or not asks:
+                        continue
+
+                    buy_total_coin = 0
+                    buy_total_value = 0
+
+                    sell_total_coin = 0
+                    sell_total_value = 0
+
+                    buy_bottom_price = float("inf")
+                    sell_top_price = 0
+
+                    buy_strong_price = 0
+                    buy_strong_coin = 0
+                    buy_strong_value = 0
+
+                    sell_strong_price = 0
+                    sell_strong_coin = 0
+                    sell_strong_value = 0
+
+                    # =========================
+                    # BUY
+                    # =========================
+                    for item in bids:
+
+                        try:
+
+                            if isinstance(item, list):
+
+                                price = float(item[0])
+                                coin = float(item[1])
+
+                            elif isinstance(item, dict):
+
+                                price = float(
+                                    item.get("price")
+                                    or item.get("p")
+                                    or 0
+                                )
+
+                                coin = float(
+                                    item.get("amount")
+                                    or item.get("qty")
+                                    or item.get("q")
+                                    or 0
+                                )
+
+                            else:
+                                continue
+
+                        except:
+                            continue
+
+                        value = price * coin
+
+                        buy_total_coin += coin
+                        buy_total_value += value
+
+                        if price < buy_bottom_price:
+                            buy_bottom_price = price
+
+                        if value > buy_strong_value:
+
+                            buy_strong_value = value
+                            buy_strong_price = price
+                            buy_strong_coin = coin
+
+                    # =========================
+                    # SELL
+                    # =========================
+                    for item in asks:
+
+                        try:
+
+                            if isinstance(item, list):
+
+                                price = float(item[0])
+                                coin = float(item[1])
+
+                            elif isinstance(item, dict):
+
+                                price = float(
+                                    item.get("price")
+                                    or item.get("p")
+                                    or 0
+                                )
+
+                                coin = float(
+                                    item.get("amount")
+                                    or item.get("qty")
+                                    or item.get("q")
+                                    or 0
+                                )
+
+                            else:
+                                continue
+
+                        except:
+                            continue
+
+                        value = price * coin
+
+                        sell_total_coin += coin
+                        sell_total_value += value
+
+                        if price > sell_top_price:
+                            sell_top_price = price
+
+                        if value > sell_strong_value:
+
+                            sell_strong_value = value
+                            sell_strong_price = price
+                            sell_strong_coin = coin
+
+                    GK_DATA["DRX"].update({
+
+                        "buy_total_coin": buy_total_coin,
+                        "buy_total_value": buy_total_value,
+                        "buy_bottom_price": buy_bottom_price,
+
+                        "buy_strong_price": buy_strong_price,
+                        "buy_strong_coin": buy_strong_coin,
+                        "buy_strong_value": buy_strong_value,
+
+                        "sell_total_coin": sell_total_coin,
+                        "sell_total_value": sell_total_value,
+                        "sell_top_price": sell_top_price,
+
+                        "sell_strong_price": sell_strong_price,
+                        "sell_strong_coin": sell_strong_coin,
+                        "sell_strong_value": sell_strong_value
+                    })
+
+                    print("✅ GK ORDERBOOK UPDATED")
+
+                    # =========================
+                    # WHALE
+                    # =========================
+                    whale_limit = 100_000_000
+
+                    if buy_strong_value >= whale_limit:
+
+                        whale_id = f"BUY_{buy_strong_price}_{buy_strong_value}"
+
+                        if whale_id != last_gk_whale:
+
+                            last_gk_whale = whale_id
+
+                            send_telegram(
+                                f"🐋 <b>GUDANGKRIPTO BUY WHALE</b>\n\n"
+                                f"🪙 DRX\n"
+                                f"💰 Price: Rp {format_rupiah(buy_strong_price)}\n"
+                                f"📦 Coin: {buy_strong_coin:,.2f}\n"
+                                f"💵 Value: Rp {format_rupiah(buy_strong_value)}"
+                            )
+
+                    if sell_strong_value >= whale_limit:
+
+                        whale_id = f"SELL_{sell_strong_price}_{sell_strong_value}"
+
+                        if whale_id != last_gk_whale:
+
+                            last_gk_whale = whale_id
+
+                            send_telegram(
+                                f"🐋 <b>GUDANGKRIPTO SELL WHALE</b>\n\n"
+                                f"🪙 DRX\n"
+                                f"💰 Price: Rp {format_rupiah(sell_strong_price)}\n"
+                                f"📦 Coin: {sell_strong_coin:,.2f}\n"
+                                f"💵 Value: Rp {format_rupiah(sell_strong_value)}"
+                            )
+
+        except Exception as e:
+
+            print("❌ GK WS ERROR:", e)
+
+            time.sleep(5)
 
 # =========================
 # MAIN LOOP
@@ -1386,7 +1770,7 @@ def loop():
                 if alert_r:
                     send_telegram(alert_r)
 
-             # =========================
+            # =========================
             # TOKOCRYPTO REALTIME ALERT
             # =========================
             if coin == "DRX":
@@ -1411,6 +1795,30 @@ def loop():
 
                     print("TOKO ALERT ERROR:", e)
 
+
+            # =========================
+            # GUDANGKRIPTO REALTIME ALERT
+            # =========================
+            if coin == "DRX":
+
+                try:
+
+                    gk_price = GK_DATA["DRX"]["price"]
+
+                    if gk_price:
+
+                        alert_gk = check_gk_alert(
+                            "DRX",
+                            gk_price
+                        )
+
+                        if alert_gk:
+                            send_telegram(alert_gk)
+
+                except Exception as e:
+
+                    print("GK ALERT ERROR:", e)
+
         # =========================
         # REPORT SCHEDULE (FIXED)
         # =========================
@@ -1432,6 +1840,11 @@ def loop():
 if __name__ == "__main__":
 
     print("🚀 Multi-Engine Bot Started")
+
+    threading.Thread(
+        target=gudangkripto_ws,
+        daemon=True
+    ).start()
 
     send_report()
 
