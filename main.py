@@ -694,52 +694,80 @@ class TokocryptoMarketError(RuntimeError):
     pass
 
 
-def fetch_tokocrypto_market(symbol="DRXIDR"):
+def fetch_tokocrypto_market(symbol="DRX_IDR"):
 
     try:
 
         url = (
             "https://www.tokocrypto.com/bapi/asset/v2/public/"
-            "asset-service/product/get-products"
+            "asset-service/product/get-product-by-symbol"
         )
 
         headers = {
             "Accept": "application/json",
-            "User-Agent": "Mozilla/5.0",
+            "User-Agent": (
+                "Mozilla/5.0 "
+                "(Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 "
+                "(KHTML, like Gecko) "
+                "Chrome/124.0 Safari/537.36"
+            ),
             "Referer": "https://www.tokocrypto.com/id/trade/DRX_IDR",
         }
 
         r = requests.get(
             url,
-            params={"includeEtf": "true"},
+            params={"symbol": symbol},
             headers=headers,
             timeout=15
         )
 
-        data = r.json()
+        print("TOKO STATUS:", r.status_code)
 
-        for item in data.get("data", []):
+        if r.status_code != 200:
+            print("TOKO BAD RESPONSE:", r.text[:300])
+            return None
 
-            if item.get("s") == symbol:
+        try:
+            raw = r.json()
+        except Exception as e:
+            print("TOKO JSON ERROR:", e)
+            print("TOKO RAW:", r.text[:300])
+            return None
 
-                return {
+        data = raw.get("data", {})
 
-                    "symbol": symbol,
+        if not data:
+            print("TOKO EMPTY DATA")
+            return None
 
-                    "last_price": float(item.get("c", 0)),
+        return {
 
-                    "high_24h": float(item.get("h", 0)),
+            "symbol": symbol,
 
-                    "low_24h": float(item.get("l", 0)),
+            # PRICE
+            "last_price": float(
+                data.get("c", 0)
+            ),
 
-                    "volume_24h_coin": float(item.get("v", 0)),
+            # HIGH LOW
+            "high_24h": float(
+                data.get("h", 0)
+            ),
 
-                    "volume_24h_idr": float(item.get("qv", 0)),
-                }
+            "low_24h": float(
+                data.get("l", 0)
+            ),
 
-        print("TOKO SYMBOL NOT FOUND:", symbol)
+            # VOLUME
+            "volume_24h_coin": float(
+                data.get("v", 0)
+            ),
 
-        return None
+            "volume_24h_idr": float(
+                data.get("qv", 0)
+            ),
+        }
 
     except Exception as e:
 
@@ -920,7 +948,7 @@ def update_tokocrypto_market():
 
     try:
 
-        data = fetch_tokocrypto_market("DRXIDR")
+        data = fetch_tokocrypto_market("DRX_IDR")
 
         TOKO_DATA["DRX"]["price"] = data["last_price"]
         TOKO_DATA["DRX"]["high"] = data["high_24h"]
