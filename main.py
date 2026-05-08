@@ -694,7 +694,7 @@ class TokocryptoMarketError(RuntimeError):
     pass
 
 
-ddef fetch_tokocrypto_market(symbol="DRXIDR"):
+def fetch_tokocrypto_market(symbol="DRXIDR"):
 
     try:
 
