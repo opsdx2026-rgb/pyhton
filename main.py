@@ -682,7 +682,7 @@ def check_gk_alert(coin, price):
 # =========================
 
 TOKO_PRODUCTS_URL = (
-    "https://www.tokocrypto.com/bapi/asset/v2/public/%22%22asset-service/product/get-products?includeEtf=true"
+    "https://www.tokocrypto.com/bapi/asset/v2/public/asset-service/product/get-products"
 )
 
 TOKO_FALLBACK_URL = (
@@ -1542,9 +1542,8 @@ def gudangkripto_ws():
                     )
 
                     GK_DATA["DRX"]["vol_idr"] = float(
-                        d.get("volume_fiat")
-                        or d.get("quote_volume")
-                        or 0
+                        GK_DATA["DRX"]["price"] *
+                        GK_DATA["DRX"]["vol_coin"]
                     )
 
                     print("✅ GK TICKER UPDATED")
