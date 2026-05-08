@@ -694,42 +694,58 @@ class TokocryptoMarketError(RuntimeError):
     pass
 
 
-def fetch_tokocrypto_market(symbol="DRXIDR"):
+ddef fetch_tokocrypto_market(symbol="DRXIDR"):
 
-    headers = {
-        "Accept": "application/json",
-        "User-Agent": "Mozilla/5.0",
-        "Origin": "https://www.tokocrypto.com",
-        "Referer": "https://www.tokocrypto.com/id/trade/DRX_IDR",
-    }
-
-    # =========================
-    # 1. MAIN 24H ENDPOINT
-    # =========================
     try:
 
-        r = requests.get(
-            "https://cloudme-toko.2meta.app/api/v1/ticker/24hr",
-            params={"symbol": symbol},
-            headers=headers,
-            timeout=15,
+        url = (
+            "https://www.tokocrypto.com/bapi/asset/v2/public/"
+            "asset-service/product/get-products"
         )
 
-        if r.status_code == 200:
+        headers = {
+            "Accept": "application/json",
+            "User-Agent": "Mozilla/5.0",
+            "Referer": "https://www.tokocrypto.com/id/trade/DRX_IDR",
+        }
 
-            data = r.json()
+        r = requests.get(
+            url,
+            params={"includeEtf": "true"},
+            headers=headers,
+            timeout=15
+        )
 
-            return {
-                "symbol": symbol,
-                "last_price": float(data.get("lastPrice", data.get("c", 0))),
-                "high_24h": float(data.get("highPrice", data.get("h", 0))),
-                "low_24h": float(data.get("lowPrice", data.get("l", 0))),
-                "volume_24h_coin": float(data.get("volume", data.get("v", 0))),
-                "volume_24h_idr": float(data.get("quoteVolume", data.get("q", 0))),
-            }
+        data = r.json()
+
+        for item in data.get("data", []):
+
+            if item.get("s") == symbol:
+
+                return {
+
+                    "symbol": symbol,
+
+                    "last_price": float(item.get("c", 0)),
+
+                    "high_24h": float(item.get("h", 0)),
+
+                    "low_24h": float(item.get("l", 0)),
+
+                    "volume_24h_coin": float(item.get("v", 0)),
+
+                    "volume_24h_idr": float(item.get("qv", 0)),
+                }
+
+        print("TOKO SYMBOL NOT FOUND:", symbol)
+
+        return None
 
     except Exception as e:
-        print("TOKO 24H API ERROR:", e)
+
+        print("TOKO PRODUCT API ERROR:", e)
+
+        return None
 
     # =========================
     # 2. FALLBACK PRICE
