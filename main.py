@@ -1550,17 +1550,16 @@ def gudangkripto_ws():
 
             subscribe_message = {
                 "action": "subscribe",
-                "channels": [
+              "channels": [
 
-                    "ticker:DRX_IDR",
+                    "market:IDR",
+                
                     "orderbook:DRX_IDR",
                     "trades:DRX_IDR",
                 
-                    "ticker:ANOA_IDR",
                     "orderbook:ANOA_IDR",
                     "trades:ANOA_IDR",
                 
-                    "ticker:CST_IDR",
                     "orderbook:CST_IDR",
                     "trades:CST_IDR"
                 ]
@@ -1574,24 +1573,10 @@ def gudangkripto_ws():
 
                 raw = ws.recv()
 
-                print("GK RAW:", raw)
+                print("GK TYPE:", msg_type)
 
                 data = json.loads(raw)
-                pair = ""
-
-                if isinstance(data.get("data"), dict):
-                
-                    pair = (
-                        data["data"].get("pair")
-                        or data["data"].get("symbol")
-                        or ""
-                    )
-                
-                coin = pair.replace("_IDR", "").upper()
-                
-                if coin not in GK_DATA:
-                    continue
-
+             
                 msg_type = str(data.get("type", "")).lower()
 
                 # =========================
@@ -1600,42 +1585,80 @@ def gudangkripto_ws():
                 if msg_type == "ticker":
 
                     d = data.get("data", {})
-
-                    GK_DATA[coin]["price"] = float(
-                        d.get("last_price", 0)
-                    )
-
-                    GK_DATA[coin]["high"] = float(
-                        d.get("high", 0)
-                    )
-
-                    GK_DATA[coin]["low"] = float(
-                        d.get("low", 0)
-                    )
-
-                    GK_DATA[coin]["vol_coin"] = float(
-                        d.get("volume_coin")
-                        or d.get("volume")
-                        or 0
-                    )
-
-                    GK_DATA[coin]["vol_idr"] = float(
-                        GK_DATA[coin]["price"] *
-                        GK_DATA[coin]["vol_coin"]
-                    )
-
-                    print("✅ GK TICKER UPDATED")
+                
+                    assets = d.get("assets", [])
+                
+                    if not assets:
+                        continue
+                
+                    for asset in assets:
+                
+                        try:
+                
+                            asset_coin = str(
+                                asset.get("coin", "")
+                            ).upper()
+                
+                            if asset_coin not in GK_DATA:
+                                continue
+                
+                            GK_DATA[asset_coin]["price"] = float(
+                                asset.get("last_price", 0)
+                            )
+                
+                            GK_DATA[asset_coin]["high"] = float(
+                                asset.get("high", 0)
+                            )
+                
+                            GK_DATA[asset_coin]["low"] = float(
+                                asset.get("low", 0)
+                            )
+                
+                            GK_DATA[asset_coin]["vol_coin"] = float(
+                                asset.get("volume", 0)
+                            )
+                
+                            GK_DATA[asset_coin]["vol_idr"] = (
+                                GK_DATA[asset_coin]["price"] *
+                                GK_DATA[asset_coin]["vol_coin"]
+                            )
+                
+                            print(
+                                f"✅ GK TICKER UPDATED: {asset_coin}"
+                            )
+                
+                        except Exception as e:
+                
+                            print(
+                                "GK TICKER PARSE ERROR:",
+                                e
+                            )
 
                 # =========================
                 # ORDERBOOK
                 # =========================
-                elif msg_type == "orderbook":
-
+               elif msg_type in [
+                    "orderbook",
+                    "depth",
+                    "order_book"
+                ]:
+                
                     d = data.get("data", {})
-
+                
+                    pair = (
+                        d.get("pair")
+                        or d.get("symbol")
+                        or ""
+                    )
+                
+                    coin = pair.replace("_IDR", "").upper()
+                
+                    if coin not in GK_DATA:
+                        continue
+                
                     bids = d.get("bids", [])
                     asks = d.get("asks", [])
-
+                
                     if not bids or not asks:
                         continue
 
@@ -1695,8 +1718,7 @@ def gudangkripto_ws():
         
                         buy_total_value += value
                         
-                        buy_strong_coin = coin_amt
-
+                     
                         if price < buy_bottom_price:
                             buy_bottom_price = price
 
@@ -1745,8 +1767,7 @@ def gudangkripto_ws():
                         
                         sell_total_value += value
                         
-                        sell_strong_coin = coin_amt
-
+                   
                         if price > sell_top_price:
                             sell_top_price = price
 
