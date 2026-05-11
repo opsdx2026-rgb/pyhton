@@ -88,8 +88,14 @@ TOKO_DATA = {
 # =========================
 GK_WS_URL = "wss://be.gudangkripto.id/ws"
 
-GK_DATA = {
-    "DRX": {
+GK_COINS = ["DRX", "ANOA", "CST"]
+
+GK_DATA = {}
+
+for coin in GK_COINS:
+
+    GK_DATA[coin] = {
+
         "price": 0,
         "high": 0,
         "low": 0,
@@ -110,10 +116,11 @@ GK_DATA = {
         "sell_strong_coin": 0,
         "sell_strong_value": 0
     }
-}
 
 last_gk_alert = {
-    "DRX": None
+    "DRX": None,
+    "ANOA": None,
+    "CST": None
 }
 
 last_gk_whale = None
@@ -949,6 +956,8 @@ def update_tokocrypto_market():
     try:
 
         data = fetch_tokocrypto_market("DRX_IDR")
+        if not data:
+            return
 
         TOKO_DATA["DRX"]["price"] = data["last_price"]
         TOKO_DATA["DRX"]["high"] = data["high_24h"]
@@ -1477,9 +1486,9 @@ def send_report():
         # =========================
         # GUDANGKRIPTO
         # =========================
-        if coin == "DRX":
+        if coin in GK_DATA:
 
-            gk = GK_DATA["DRX"]
+            gk = GK_DATA[coin]
 
             line += f"\n\n🏦 <b>GUDANGKRIPTO</b>"
 
@@ -1491,6 +1500,7 @@ def send_report():
             line += f"\n🪙 Volume Coin: {gk['vol_coin']:,.2f}".replace(",", ".")
             line += f"\n💰 Volume IDR: Rp {format_rupiah(gk['vol_idr'])}"
 
+            # SELL
             line += f"\n\n🟥 SELL"
             line += f"\n   🔺 Highest Offer: Rp {format_rupiah(gk['sell_top_price'])}"
             line += f"\n   🪙 Total Offer Coin: {gk['sell_total_coin']:,.2f}".replace(",", ".")
@@ -1501,6 +1511,7 @@ def send_report():
             line += f"\n      Coin: {gk['sell_strong_coin']:,.2f}".replace(",", ".")
             line += f"\n      Value: Rp {format_rupiah(gk['sell_strong_value'])}"
 
+            # BUY
             line += f"\n\n🟩 BUY"
             line += f"\n   🔻 Lowest Bid: Rp {format_rupiah(gk['buy_bottom_price'])}"
             line += f"\n   🪙 Total Bid Coin: {gk['buy_total_coin']:,.2f}".replace(",", ".")
@@ -1540,9 +1551,18 @@ def gudangkripto_ws():
             subscribe_message = {
                 "action": "subscribe",
                 "channels": [
+
                     "ticker:DRX_IDR",
                     "orderbook:DRX_IDR",
-                    "trades:DRX_IDR"
+                    "trades:DRX_IDR",
+                
+                    "ticker:ANOA_IDR",
+                    "orderbook:ANOA_IDR",
+                    "trades:ANOA_IDR",
+                
+                    "ticker:CST_IDR",
+                    "orderbook:CST_IDR",
+                    "trades:CST_IDR"
                 ]
             }
 
@@ -1557,6 +1577,20 @@ def gudangkripto_ws():
                 print("GK RAW:", raw)
 
                 data = json.loads(raw)
+                pair = ""
+
+                if isinstance(data.get("data"), dict):
+                
+                    pair = (
+                        data["data"].get("pair")
+                        or data["data"].get("symbol")
+                        or ""
+                    )
+                
+                coin = pair.replace("_IDR", "").upper()
+                
+                if coin not in GK_DATA:
+                    continue
 
                 msg_type = str(data.get("type", "")).lower()
 
@@ -1567,27 +1601,27 @@ def gudangkripto_ws():
 
                     d = data.get("data", {})
 
-                    GK_DATA["DRX"]["price"] = float(
+                    GK_DATA[coin]["price"] = float(
                         d.get("last_price", 0)
                     )
 
-                    GK_DATA["DRX"]["high"] = float(
+                    GK_DATA[coin]["high"] = float(
                         d.get("high", 0)
                     )
 
-                    GK_DATA["DRX"]["low"] = float(
+                    GK_DATA[coin]["low"] = float(
                         d.get("low", 0)
                     )
 
-                    GK_DATA["DRX"]["vol_coin"] = float(
+                    GK_DATA[coin]["vol_coin"] = float(
                         d.get("volume_coin")
                         or d.get("volume")
                         or 0
                     )
 
-                    GK_DATA["DRX"]["vol_idr"] = float(
-                        GK_DATA["DRX"]["price"] *
-                        GK_DATA["DRX"]["vol_coin"]
+                    GK_DATA[coin]["vol_idr"] = float(
+                        GK_DATA[coin]["price"] *
+                        GK_DATA[coin]["vol_coin"]
                     )
 
                     print("✅ GK TICKER UPDATED")
@@ -1632,7 +1666,7 @@ def gudangkripto_ws():
                             if isinstance(item, list):
 
                                 price = float(item[0])
-                                coin = float(item[1])
+                                coin_amt = float(item[1])
 
                             elif isinstance(item, dict):
 
@@ -1642,7 +1676,7 @@ def gudangkripto_ws():
                                     or 0
                                 )
 
-                                coin = float(
+                                coin_amt = float(
                                     item.get("amount")
                                     or item.get("qty")
                                     or item.get("q")
@@ -1655,10 +1689,13 @@ def gudangkripto_ws():
                         except:
                             continue
 
-                        value = price * coin
+                        value = price * coin_amt
 
-                        buy_total_coin += coin
+                        buy_total_coin += coin_amt
+        
                         buy_total_value += value
+                        
+                        buy_strong_coin = coin_amt
 
                         if price < buy_bottom_price:
                             buy_bottom_price = price
@@ -1667,7 +1704,7 @@ def gudangkripto_ws():
 
                             buy_strong_value = value
                             buy_strong_price = price
-                            buy_strong_coin = coin
+                            buy_strong_coin = coin_amt
 
                     # =========================
                     # SELL
@@ -1679,7 +1716,7 @@ def gudangkripto_ws():
                             if isinstance(item, list):
 
                                 price = float(item[0])
-                                coin = float(item[1])
+                                coin_amt = float(item[1])
 
                             elif isinstance(item, dict):
 
@@ -1689,7 +1726,7 @@ def gudangkripto_ws():
                                     or 0
                                 )
 
-                                coin = float(
+                                coin_amt = float(
                                     item.get("amount")
                                     or item.get("qty")
                                     or item.get("q")
@@ -1702,10 +1739,13 @@ def gudangkripto_ws():
                         except:
                             continue
 
-                        value = price * coin
+                        value = price * coin_amt
 
-                        sell_total_coin += coin
+                        sell_total_coin += coin_amt
+                        
                         sell_total_value += value
+                        
+                        sell_strong_coin = coin_amt
 
                         if price > sell_top_price:
                             sell_top_price = price
@@ -1714,9 +1754,9 @@ def gudangkripto_ws():
 
                             sell_strong_value = value
                             sell_strong_price = price
-                            sell_strong_coin = coin
+                            sell_strong_coin = coin_amt
 
-                    GK_DATA["DRX"].update({
+                    GK_DATA[coin].update({
 
                         "buy_total_coin": buy_total_coin,
                         "buy_total_value": buy_total_value,
@@ -1752,7 +1792,7 @@ def gudangkripto_ws():
 
                             send_telegram(
                                 f"🐋 <b>GUDANGKRIPTO BUY WHALE</b>\n\n"
-                                f"🪙 DRX\n"
+                                f"🪙 {coin}\n"
                                 f"💰 Price: Rp {format_rupiah(buy_strong_price)}\n"
                                 f"📦 Coin: {buy_strong_coin:,.2f}\n"
                                 f"💵 Value: Rp {format_rupiah(buy_strong_value)}"
@@ -1768,7 +1808,7 @@ def gudangkripto_ws():
 
                             send_telegram(
                                 f"🐋 <b>GUDANGKRIPTO SELL WHALE</b>\n\n"
-                                f"🪙 DRX\n"
+                                f"🪙 {coin}\n"
                                 f"💰 Price: Rp {format_rupiah(sell_strong_price)}\n"
                                 f"📦 Coin: {sell_strong_coin:,.2f}\n"
                                 f"💵 Value: Rp {format_rupiah(sell_strong_value)}"
@@ -1842,16 +1882,16 @@ def loop():
             # =========================
             # GUDANGKRIPTO REALTIME ALERT
             # =========================
-            if coin == "DRX":
+            if coin in GK_DATA:
 
                 try:
 
-                    gk_price = GK_DATA["DRX"]["price"]
+                    gk_price = GK_DATA[coin]["price"]
 
                     if gk_price:
 
                         alert_gk = check_gk_alert(
-                            "DRX",
+                            coin,
                             gk_price
                         )
 
