@@ -688,165 +688,145 @@ def check_gk_alert(coin, price):
 # TOKOCRYPTO PRICE
 # =========================
 
+TOKO_PRODUCT_BY_SYMBOL_URL = (
+    "https://www.tokocrypto.com/bapi/asset/v2/public/"
+    "asset-service/product/get-product-by-symbol"
+)
+
 TOKO_PRODUCTS_URL = (
-    "https://www.tokocrypto.com/bapi/asset/v2/public/asset-service/product/get-products"
+    "https://www.tokocrypto.com/bapi/asset/v2/public/"
+    "asset-service/product/get-products?includeEtf=true"
 )
 
-TOKO_FALLBACK_URL = (
-    "https://cloudme-toko.2meta.app/api/v1/ticker/24hr?symbol=DRXIDR"
-)
+TOKO_TICKER_URL = "https://cloudme-toko.2meta.app/api/v1/ticker/24hr"
 
 
-class TokocryptoMarketError(RuntimeError):
-    pass
+def toko_headers(symbol="DRX_IDR"):
+    return {
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Referer": f"https://www.tokocrypto.com/id/trade/{symbol}",
+        "Origin": "https://www.tokocrypto.com",
+    }
+
+
+def parse_toko_product(data, symbol):
+    return {
+        "symbol": symbol,
+        "last_price": float(data.get("c", 0)),
+        "high_24h": float(data.get("h", 0)),
+        "low_24h": float(data.get("l", 0)),
+        "volume_24h_coin": float(data.get("v", 0)),
+        "volume_24h_idr": float(data.get("qv", data.get("q", 0))),
+    }
 
 
 def fetch_tokocrypto_market(symbol="DRX_IDR"):
+    session = requests.Session()
+    headers = toko_headers(symbol)
+    stream_symbol = symbol.replace("_", "")
 
+    # 1. Main Tokocrypto endpoint
     try:
-
-        url = (
-            "https://www.tokocrypto.com/bapi/asset/v2/public/"
-            "asset-service/product/get-product-by-symbol"
-        )
-
-        headers = {
-            "Accept": "application/json",
-            "User-Agent": (
-                "Mozilla/5.0 "
-                "(Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 "
-                "(KHTML, like Gecko) "
-                "Chrome/124.0 Safari/537.36"
-            ),
-            "Referer": "https://www.tokocrypto.com/id/trade/DRX_IDR",
-        }
-
-        r = requests.get(
-            url,
+        r = session.get(
+            TOKO_PRODUCT_BY_SYMBOL_URL,
             params={"symbol": symbol},
             headers=headers,
-            timeout=15
+            timeout=15,
         )
 
-        print("TOKO STATUS:", r.status_code)
+        print("TOKO BY SYMBOL STATUS:", r.status_code)
 
-        if r.status_code != 200:
-            print("TOKO BAD RESPONSE:", r.text[:300])
-            return None
-
-        try:
+        if r.status_code == 200:
             raw = r.json()
-        except Exception as e:
-            print("TOKO JSON ERROR:", e)
-            print("TOKO RAW:", r.text[:300])
-            return None
+            data = raw.get("data")
+            if data:
+                return parse_toko_product(data, symbol)
 
-        data = raw.get("data", {})
-
-        if not data:
-            print("TOKO EMPTY DATA")
-            return None
-
-        return {
-
-            "symbol": symbol,
-
-            # PRICE
-            "last_price": float(
-                data.get("c", 0)
-            ),
-
-            # HIGH LOW
-            "high_24h": float(
-                data.get("h", 0)
-            ),
-
-            "low_24h": float(
-                data.get("l", 0)
-            ),
-
-            # VOLUME
-            "volume_24h_coin": float(
-                data.get("v", 0)
-            ),
-
-            "volume_24h_idr": float(
-                data.get("qv", 0)
-            ),
-        }
+        if r.status_code == 451:
+            print("TOKO blocked with 451 on this IP/network")
 
     except Exception as e:
+        print("TOKO BY SYMBOL ERROR:", e)
 
-        print("TOKO PRODUCT API ERROR:", e)
-
-        return None
-
-    # =========================
-    # 2. WS FALLBACK
-    # =========================
-
+    # 2. Product list fallback
     try:
+        r = session.get(TOKO_PRODUCTS_URL, headers=headers, timeout=15)
 
-        print("USING TOKO WS FALLBACK")
+        print("TOKO PRODUCTS STATUS:", r.status_code)
 
-        # DRX_IDR -> drxidr
-        stream_symbol = symbol.replace("_", "").lower()
+        if r.status_code == 200:
+            raw = r.json()
+            products = raw.get("data", [])
 
+            for item in products:
+                if item.get("s") == symbol:
+                    return parse_toko_product(item, symbol)
+
+    except Exception as e:
+        print("TOKO PRODUCTS FALLBACK ERROR:", e)
+
+    # 3. Public ticker fallback
+    try:
+        r = session.get(
+            TOKO_TICKER_URL,
+            params={"symbol": stream_symbol},
+            headers={"Accept": "application/json", "User-Agent": headers["User-Agent"]},
+            timeout=15,
+        )
+
+        print("TOKO TICKER STATUS:", r.status_code)
+
+        if r.status_code == 200:
+            raw = r.json()
+            data = raw.get("data", raw)
+
+            return {
+                "symbol": symbol,
+                "last_price": float(data.get("lastPrice", data.get("c", 0))),
+                "high_24h": float(data.get("highPrice", data.get("h", 0))),
+                "low_24h": float(data.get("lowPrice", data.get("l", 0))),
+                "volume_24h_coin": float(data.get("volume", data.get("v", 0))),
+                "volume_24h_idr": float(data.get("quoteVolume", data.get("q", 0))),
+            }
+
+    except Exception as e:
+        print("TOKO TICKER FALLBACK ERROR:", e)
+
+    # 4. WebSocket fallback
+    try:
         ws_url = (
-            f"wss://stream-cloud.tokocrypto.site/stream/ws/"
-            f"{stream_symbol}@miniTicker"
+            "wss://stream-cloud.tokocrypto.site/stream/ws/"
+            f"{stream_symbol.lower()}@miniTicker"
         )
 
-        ws = websocket.create_connection(
-            ws_url,
-            timeout=10
-        )
-
-        print("TOKO WS FALLBACK CONNECTED")
-
+        ws = websocket.create_connection(ws_url, timeout=10)
         raw = ws.recv()
-
-        print("TOKO WS RAW:", raw)
+        ws.close()
 
         data = json.loads(raw)
-
-        # combined stream support
         if "data" in data:
             data = data["data"]
 
-        ws.close()
-
         return {
-
             "symbol": symbol,
-
-            "last_price": float(
-                data.get("c", 0)
-            ),
-
-            "high_24h": float(
-                data.get("h", 0)
-            ),
-
-            "low_24h": float(
-                data.get("l", 0)
-            ),
-
-            "volume_24h_coin": float(
-                data.get("v", 0)
-            ),
-
-            "volume_24h_idr": float(
-                data.get("q", 0)
-            ),
+            "last_price": float(data.get("c", 0)),
+            "high_24h": float(data.get("h", 0)),
+            "low_24h": float(data.get("l", 0)),
+            "volume_24h_coin": float(data.get("v", 0)),
+            "volume_24h_idr": float(data.get("q", 0)),
         }
 
     except Exception as e:
-
         print("TOKO WS FALLBACK ERROR:", e)
 
-        return None
+    return None
+
 
 
 # =========================
