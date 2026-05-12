@@ -783,68 +783,70 @@ def fetch_tokocrypto_market(symbol="DRX_IDR"):
         return None
 
     # =========================
-    # 2. FALLBACK PRICE
+    # 2. WS FALLBACK
     # =========================
-    price = 0
 
     try:
 
-        r = requests.get(
-            "https://cloudme-toko.2meta.app/api/v1/ticker/price",
-            params={"symbol": symbol},
-            headers=headers,
-            timeout=15,
+        print("USING TOKO WS FALLBACK")
+
+        # DRX_IDR -> drxidr
+        stream_symbol = symbol.replace("_", "").lower()
+
+        ws_url = (
+            f"wss://stream-cloud.tokocrypto.site/stream/ws/"
+            f"{stream_symbol}@miniTicker"
         )
 
-        if r.status_code == 200:
-            price = float(r.json().get("price", 0))
-
-    except Exception as e:
-        print("TOKO PRICE API ERROR:", e)
-
-    # =========================
-    # 3. FALLBACK KLINE
-    # =========================
-    high = low = vol_coin = vol_idr = 0
-
-    try:
-
-        r = requests.get(
-            "https://cloudme-toko.2meta.app/api/v1/klines",
-            params={
-                "symbol": symbol,
-                "interval": "1d",
-                "limit": 1
-            },
-            headers=headers,
-            timeout=15,
+        ws = websocket.create_connection(
+            ws_url,
+            timeout=10
         )
 
-        if r.status_code == 200:
+        print("TOKO WS FALLBACK CONNECTED")
 
-            candle = r.json()
+        raw = ws.recv()
 
-            if isinstance(candle, dict):
-                candle = candle.get("data", [])
+        print("TOKO WS RAW:", raw)
 
-            row = candle[-1]
+        data = json.loads(raw)
 
-            high = float(row[2])
-            low = float(row[3])
-            vol_coin = float(row[5])
-            vol_idr = float(row[7]) if len(row) > 7 else 0
+        # combined stream support
+        if "data" in data:
+            data = data["data"]
+
+        ws.close()
+
+        return {
+
+            "symbol": symbol,
+
+            "last_price": float(
+                data.get("c", 0)
+            ),
+
+            "high_24h": float(
+                data.get("h", 0)
+            ),
+
+            "low_24h": float(
+                data.get("l", 0)
+            ),
+
+            "volume_24h_coin": float(
+                data.get("v", 0)
+            ),
+
+            "volume_24h_idr": float(
+                data.get("q", 0)
+            ),
+        }
 
     except Exception as e:
-        print("TOKO KLINE API ERROR:", e)
 
-    return {
-        "symbol": symbol,
-        "last_price": price,
-        "high_24h": high,
-        "low_24h": low,
-        "volume_24h_coin": vol_coin,
-        "volume_24h_idr": vol_idr,
-    }
+        print("TOKO WS FALLBACK ERROR:", e)
+
+        return None
 
 
 # =========================
